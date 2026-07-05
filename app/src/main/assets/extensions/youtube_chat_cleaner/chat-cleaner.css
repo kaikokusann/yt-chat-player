@@ -1,0 +1,156 @@
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-text-message-renderer #author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-paid-message-renderer #author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-paid-sticker-renderer #author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-membership-item-renderer #author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-viewer-engagement-message-renderer #author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-text-message-renderer yt-img-shadow#author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-paid-message-renderer yt-img-shadow#author-photo,
+:root.ytcc-enabled.ytcc-hide-avatar yt-live-chat-membership-item-renderer yt-img-shadow#author-photo {
+  display: none !important;
+}
+
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-text-message-renderer #author-name,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-text-message-renderer #author-name-chip,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-text-message-renderer yt-live-chat-author-chip,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-paid-message-renderer #author-name,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-paid-message-renderer #author-name-chip,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-paid-message-renderer yt-live-chat-author-chip,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-paid-sticker-renderer #author-name,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-membership-item-renderer #author-name,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-membership-item-renderer #author-name-chip,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-membership-item-renderer yt-live-chat-author-chip {
+  display: none !important;
+}
+
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-text-message-renderer yt-live-chat-author-badge-renderer,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-paid-message-renderer yt-live-chat-author-badge-renderer,
+:root.ytcc-enabled.ytcc-hide-name yt-live-chat-membership-item-renderer yt-live-chat-author-badge-renderer {
+  display: none !important;
+}
+
+:root.ytcc-enabled.ytcc-compact yt-live-chat-text-message-renderer,
+:root.ytcc-enabled.ytcc-compact yt-live-chat-paid-message-renderer,
+:root.ytcc-enabled.ytcc-compact yt-live-chat-paid-sticker-renderer,
+:root.ytcc-enabled.ytcc-compact yt-live-chat-membership-item-renderer {
+  --yt-live-chat-item-timestamp-display: none;
+}
+
+:root.ytcc-enabled.ytcc-compact yt-live-chat-text-message-renderer #content,
+:root.ytcc-enabled.ytcc-compact yt-live-chat-text-message-renderer #message,
+:root.ytcc-enabled.ytcc-compact yt-live-chat-paid-message-renderer #content,
+:root.ytcc-enabled.ytcc-compact yt-live-chat-membership-item-renderer #content {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+:root.ytcc-enabled.ytcc-compact yt-live-chat-text-message-renderer #message {
+  display: inline !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+}
+
+:root.ytcc-enabled.ytcc-compact yt-live-chat-text-message-renderer {
+  padding: 4px 12px !important;
+}
+
+:root.ytcc-enabled.ytcc-compact yt-live-chat-item-list-renderer #items {
+  padding-left: 0 !important;
+}
+
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-text-message-renderer,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-paid-message-renderer,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-paid-sticker-renderer,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-membership-item-renderer {
+  text-align: right !important;
+}
+
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-text-message-renderer #content,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-paid-message-renderer #content,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-membership-item-renderer #content {
+  display: block !important;
+  text-align: right !important;
+  width: auto !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-text-message-renderer #message,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-paid-message-renderer #message,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-membership-item-renderer #message {
+  display: inline !important;
+  text-align: right !important;
+}
+
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-text-message-renderer #content img,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-paid-message-renderer #content img,
+:root.ytcc-enabled.ytcc-align-right yt-live-chat-membership-item-renderer #content img {
+  display: inline-block !important;
+}
+
+/* ---------- 全画面チャット幅制御 ---------- */
+/* チャットが表示されている場合のみ適用する。
+   ytcc-chat-visible クラスは content.js が MutationObserver で管理する。 */
+
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] {
+  --ytd-watch-flexy-sidebar-width: var(--ytcc-chat-width) !important;
+}
+
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #chat,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #chat-container,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] ytd-live-chat-frame,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #panels,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #secondary,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #secondary-inner,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-live-chat"] {
+  flex: 0 0 var(--ytcc-chat-width) !important;
+  max-width: var(--ytcc-chat-width) !important;
+  min-width: var(--ytcc-chat-width) !important;
+  width: var(--ytcc-chat-width) !important;
+}
+
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #columns,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #primary,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #player,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #player-full-bleed-container,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #player-container,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #player-container-inner {
+  max-width: calc(100vw - var(--ytcc-chat-width)) !important;
+}
+
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #player-container,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] #movie_player {
+  width: calc(100vw - var(--ytcc-chat-width)) !important;
+}
+
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] iframe#chatframe,
+:root.ytcc-enabled.ytcc-chat-visible ytd-watch-flexy[fullscreen] ytd-live-chat-frame iframe {
+  width: var(--ytcc-chat-width) !important;
+}
+
+/* チャット非表示時：動画プレーヤーが全幅に戻る */
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #columns,
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #primary,
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #player,
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #player-full-bleed-container,
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #player-container,
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #player-container-inner {
+  max-width: 100vw !important;
+}
+
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #player-container,
+:root.ytcc-enabled:not(.ytcc-chat-visible) ytd-watch-flexy[fullscreen] #movie_player {
+  width: 100vw !important;
+}
+
+/* ---------- 狭いチャット幅への対応 (min-width 解除) ---------- */
+/* チャット全体の幅を縮小した際、YouTube公式の min-width 制限によって
+   コンテナが右側にはみ出し、右寄せされたチャット文字が切れてしまうのを防ぎます。 */
+:root.ytcc-enabled yt-live-chat-app,
+:root.ytcc-enabled yt-live-chat-renderer,
+:root.ytcc-enabled #items.yt-live-chat-item-list-renderer,
+:root.ytcc-enabled #item-scroller.yt-live-chat-item-list-renderer {
+  min-width: 0 !important;
+  width: 100% !important;
+}

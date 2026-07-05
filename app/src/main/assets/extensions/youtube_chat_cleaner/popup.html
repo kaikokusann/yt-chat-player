@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YouTube Chat Cleaner</title>
+<link rel="stylesheet" href="popup.css">
+<form>
+  <h1>YouTube Chat Cleaner</h1>
+  <label>
+    <input type="checkbox" name="enabled">
+    <span>有効にする</span>
+  </label>
+  <label>
+    <input type="checkbox" name="hideAvatar">
+    <span>ユーザーアイコンを隠す</span>
+  </label>
+  <label>
+    <input type="checkbox" name="hideName">
+    <span>ユーザー名を隠す</span>
+  </label>
+  <label>
+    <input type="checkbox" name="compact">
+    <span>本文を詰めて表示</span>
+  </label>
+  <label>
+    <input type="checkbox" name="alignRight">
+    <span>コメントを右詰めで表示</span>
+  </label>
+  <fieldset>
+    <legend>全画面チャット幅</legend>
+    <label><input type="radio" name="chatWidthPercent" value="10"><span>10%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="20"><span>20%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="30"><span>30%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="40"><span>40%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="50"><span>50%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="60"><span>60%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="70"><span>70%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="80"><span>80%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="90"><span>90%</span></label>
+    <label><input type="radio" name="chatWidthPercent" value="100"><span>100%</span></label>
+  </fieldset>
+  <p>設定はYouTubeページに即時反映されます。</p>
+</form>
+<script src="popup.js"></script>

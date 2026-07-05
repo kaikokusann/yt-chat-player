@@ -1,0 +1,36 @@
+{
+  "manifest_version": 2,
+  "name": "YouTube Chat Cleaner",
+  "version": "0.6.5",
+  "description": "Hide user names and avatars in YouTube live chat.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "youtube-chat-cleaner@local"
+    }
+  },
+  "permissions": [
+    "storage",
+    "*://www.youtube.com/*",
+    "*://m.youtube.com/*"
+  ],
+  "browser_action": {
+    "default_title": "YouTube Chat Cleaner",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*"
+      ],
+      "all_frames": true,
+      "css": [
+        "chat-cleaner.css"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

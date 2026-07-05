@@ -1,0 +1,65 @@
+{
+  "manifest_version": 2,
+  "name": "YouTube LiveChat Flusher",
+  "version": "0.15.11",
+  "description": "Display YouTube live chat over the video.",
+  "author": "_y_s",
+  "default_locale": "en",
+  "homepage_url": "https://github.com/ys-j/YoutubeLiveChatFlusher",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "youtube-live-chat-flusher@local"
+    }
+  },
+  "permissions": [
+    "storage",
+    "notifications",
+    "*://www.youtube.com/*",
+    "*://m.youtube.com/*"
+  ],
+  "browser_action": {
+    "default_title": "YouTube LiveChat Flusher"
+  },
+  "options_ui": {
+    "page": "options/options.html"
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "32": "images/icon32.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*"
+      ],
+      "css": [
+        "styles/content.css"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/live_chat*",
+        "*://m.youtube.com/live_chat*"
+      ],
+      "all_frames": true,
+      "js": [
+        "chatframe.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    "modules/*",
+    "injections/*",
+    "styles/*",
+    "templates/*",
+    "images/*"
+  ]
+}

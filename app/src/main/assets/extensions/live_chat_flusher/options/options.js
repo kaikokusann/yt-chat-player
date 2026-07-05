@@ -1,0 +1,184 @@
+import { logger } from '../modules/logging.mjs';
+import { store as s } from '../modules/store.mjs';
+
+// @ts-expect-error
+self.browser ??= chrome;
+
+const manifest = browser.runtime.getManifest();
+document.documentElement.dataset.browser = 'browser_specific_settings' in manifest ? 'firefox' : 'chrome';
+
+/** @type {NodeListOf<HTMLElement>} */
+const i18nElems = document.querySelectorAll('[data-i18n]');
+for (const el of i18nElems) {
+	const key = el.dataset.i18n;
+	if (key) {
+		const msg = browser.i18n.getMessage(key);
+		if (msg) el.textContent = msg;
+	}
+}
+/** @type {NodeListOf<HTMLInputElement | HTMLTextAreaElement>} */
+const i18nPlaceholders = document.querySelectorAll('[data-i18n-placeholder]');
+for (const el of i18nPlaceholders) {
+	const key = el.dataset.i18nPlaceholder;
+	if (key) {
+		const msg = browser.i18n.getMessage(key);
+		if (msg) el.placeholder = msg;
+	}
+}
+
+/** @type {NodeListOf<HTMLElement>} */
+const manifestElems = document.querySelectorAll('[data-manifest]');
+for (const el of manifestElems) {
+	const key = el.dataset.manifest;
+	// @ts-expect-error
+	if (key && key in manifest) el.textContent = manifest[key];
+}
+
+const exportBtn = document.getElementById('btn-export');
+exportBtn?.addEventListener('click', () => {
+	const a = document.createElement('a');
+	const blob = new Blob([ JSON.stringify(s.data) ], { type: 'application/json' });
+	const url = URL.createObjectURL(blob);
+	a.download = `ytlcf-config-${Date.now()}.json`;
+	a.href = url;
+	a.click();
+}, { passive: true });
+
+const importBtn = document.getElementById('btn-import');
+importBtn?.addEventListener('click', async () => {
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = 'application/json';
+	input.addEventListener('cancel', () => {
+		logger.debug('Config file import is canceled.');
+	}, { passive: true });
+	input.addEventListener('change', () => {
+		const files = input.files;
+		if (files && files.length > 0) {
+			logger.debug('Config file selected:', files[0].name);
+			const reader = new FileReader();
+			reader.onload = async e => {
+				const json = JSON.parse(/** @type {string} */ (e.target?.result));
+				await s.load(json);
+				await browser.storage.local.set(s.data);
+				browser.runtime.sendMessage({ fire: 'reloadTabs' });
+			};
+			reader.readAsText(files[0]);
+		}
+	}, { passive: true });
+	input.click();
+}, { passive: true });
+
+const initBtn = document.getElementById('btn-init');
+initBtn?.addEventListener('click', async () => {
+	await s.reset();
+	await browser.runtime.sendMessage({ fire: 'reloadTabs' });
+	location.reload();
+}, { passive: true });
+
+const saveBtn = /** @type {?HTMLButtonElement} */ (document.getElementById('btn-save'));
+const saveBtnTop = /** @type {?HTMLButtonElement} */ (document.getElementById('btn-save-top'));
+
+const form = document.forms[0];
+
+/** @type {Record<string, RadioNodeList>} */
+// @ts-expect-error
+const { mode_livestream, mode_replay, autostart, pip_window_mode, message_pause, person_detection } = form.elements;
+
+/** @type {Record<string, HTMLInputElement>} */
+// @ts-expect-error
+const {
+	hotkey_layer_key, hotkey_layer_alt,
+	hotkey_panel_key, hotkey_panel_alt,
+	hotkey_pip_key, hotkey_pip_alt,
+	translation_blacklist_regexp,
+	translation_url
+} = form.elements;
+
+/** @type {Record<string, HTMLTextAreaElement>} */
+// @ts-expect-error
+const { translation_blacklist } = form.elements;
+/** @type {Record<string, HTMLTextAreaElement>} */
+// @ts-expect-error
+const { translation_translator } = form.elements;
+
+s.load().then(() => {
+	// mode
+	mode_livestream.value = s.others.mode_livestream.toString();
+	mode_replay.value = s.others.mode_replay.toString();
+
+	// autostart
+	autostart.value = s.others.autostart.toString();
+	pip_window_mode.value = (s.others.pip_window_mode ?? 1).toString();
+
+	// hotkeys
+	hotkey_layer_key.value = s.hotkeys.layer.key ?? s.hotkeys.layer;
+	hotkey_layer_alt.checked = s.hotkeys.layer.alt;
+	hotkey_panel_key.value = s.hotkeys.panel.key ?? s.hotkeys.panel;
+	hotkey_panel_alt.checked = s.hotkeys.panel.alt;
+	hotkey_pip_key.value = s.hotkeys.pip.key;
+	hotkey_pip_alt.checked = s.hotkeys.pip.alt;
+
+	// message pause
+	message_pause.value = s.others.message_pause.toString();
+
+	// person detection
+	person_detection.value = s.others.person_detection.toString();
+
+	// translation
+	/** @type {HTMLInputElement} */
+	(translation_blacklist_regexp).checked = s.translation.regexp;
+	translation_blacklist.value = s.translation.plainList.join('\n');
+	translation_translator.value = s.translation.translator;
+	translation_url.value = s.translation.url;
+});
+
+const status = document.getElementById('status');
+form.addEventListener('change', () => {
+	if (saveBtn) saveBtn.disabled = false;
+	if (saveBtnTop) saveBtnTop.disabled = false;
+	if (status) status.hidden = false;
+});
+
+form.addEventListener('submit', async e => {
+	e.preventDefault();
+	if (Number.parseInt(person_detection.value, 10) > 0) {
+		/** @type { { permissions: ["trialML"] } } */
+		const permission = { permissions: ['trialML'] };
+		const granted = await browser.permissions.request(permission);
+		if (!granted) person_detection.value = '0';
+	}
+
+	const config = {
+		/** @type {Partial<typeof s.data.others>} */
+		others: {
+			// @ts-expect-error
+			mode_livestream: Number.parseInt(mode_livestream.value, 10),
+			// @ts-expect-error
+			mode_replay: Number.parseInt(mode_replay.value, 10),
+			autostart: Number.parseInt(autostart.value, 10),
+			pip_window_mode: Number.parseInt(pip_window_mode.value, 10),
+			message_pause: Number.parseInt(message_pause.value, 10),
+			person_detection: Number.parseInt(person_detection.value, 10),
+		},
+		/** @type {Partial<typeof s.data.hotkeys>} */
+		hotkeys: {
+			layer: { key: hotkey_layer_key.value, alt: hotkey_layer_alt.checked },
+			panel: { key: hotkey_panel_key.value, alt: hotkey_panel_alt.checked },
+			pip: { key: hotkey_pip_key.value, alt: hotkey_pip_alt.checked },
+		},
+		/** @type {Partial<typeof s.data.translation>} */
+		translation: {
+			regexp: /** @type {HTMLInputElement} */ (translation_blacklist_regexp).checked,
+			plainList: translation_blacklist.value.split(/\n+/).filter(s => s.length > 0),
+			translator: /** @type {"external" | "internal"} */ (translation_translator.value),
+			url: translation_url.value,
+		},
+	};
+	await s.load(config);
+	await browser.storage.local.set(s.data);
+	if (status) status.hidden = true;
+	if (saveBtn) saveBtn.disabled = true;
+	if (saveBtnTop) saveBtnTop.disabled = true;
+	location.hash = `ytchat-saved-${Date.now()}`;
+});

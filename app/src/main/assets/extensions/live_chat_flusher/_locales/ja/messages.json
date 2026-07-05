@@ -1,0 +1,527 @@
+{
+   "Channel_ID": {
+      "message": "チャンネルID\n(各行ごと)"
+   },
+   "aboutAddon": {
+      "message": "拡張機能について"
+   },
+   "add": {
+      "message": "追加"
+   },
+   "addUserStyle": {
+      "message": "ユーザー別スタイルを追加"
+   },
+   "addableByBrowserLanguageSettings": {
+      "message": "項目はブラウザの言語設定から追加可"
+   },
+   "animationDuration": {
+      "message": "アニメーション秒数"
+   },
+   "autostart": {
+      "message": "チャット欄の自動オープン（アーカイブ再生時）"
+   },
+   "backgroundOpacity": {
+      "message": "背景の透過度"
+   },
+   "byTypeTab": {
+      "message": "種類別"
+   },
+   "cancel": {
+      "message": "キャンセル"
+   },
+   "close": {
+      "message": "閉じる"
+   },
+   "common": {
+      "message": "共通"
+   },
+   "commonSettings": {
+      "message": "共通設定"
+   },
+   "configFile": {
+      "message": "設定ファイル"
+   },
+   "confirm": {
+      "message": "決定"
+   },
+   "containerLimit": {
+      "message": "チャット欄表示数"
+   },
+   "delete": {
+      "message": "削除"
+   },
+   "density": {
+      "message": "表示密度"
+   },
+   "density_dense": {
+      "message": "詰める"
+   },
+   "density_random": {
+      "message": "ランダム"
+   },
+   "description_chatframe_dependent_1": {
+      "message": "チャット欄を開いているときのみ動作します。"
+   },
+   "description_chatframe_independent_1": {
+      "message": "チャット欄を閉じていても動作します。"
+   },
+   "description_chatframe_independent_2": {
+      "message": "アーカイブではタイムシフト機能が利用可能（コメントを流すタイミングを調整可能）です。"
+   },
+   "description_chatframe_independent_3": {
+      "message": "特に長時間の動画では動作が不安定な場合があります。"
+   },
+   "direction": {
+      "message": "方向"
+   },
+   "direction_bottom_to_top": {
+      "message": "下から上へ"
+   },
+   "direction_left_to_right": {
+      "message": "左から右へ"
+   },
+   "disabled": {
+      "message": "しない"
+   },
+   "displayLimit": {
+      "message": "最大表示数"
+   },
+   "displaySettings": {
+      "message": "表示設定"
+   },
+   "displayStyle": {
+      "message": "表示スタイル"
+   },
+   "displayTab": {
+      "message": "基本"
+   },
+   "display_authorName": {
+      "message": "名前"
+   },
+   "display_chatMessage": {
+      "message": "本文"
+   },
+   "display_customColor": {
+      "message": "カスタム色"
+   },
+   "display_membershipMessage": {
+      "message": "本文"
+   },
+   "display_milestoneMonths": {
+      "message": "月数"
+   },
+   "display_purchaseAmount": {
+      "message": "金額"
+   },
+   "display_sticker": {
+      "message": "ステッカー"
+   },
+   "display_stickerSize": {
+      "message": "サイズ"
+   },
+   "down": {
+      "message": "下へ"
+   },
+   "emojiExpression": {
+      "message": "絵文字の表示"
+   },
+   "emojiExpression_0": {
+      "message": "全て非表示"
+   },
+   "emojiExpression_1": {
+      "message": "全て表示"
+   },
+   "emojiExpression_2": {
+      "message": "ラベルに置換する"
+   },
+   "emojiExpression_3": {
+      "message": "ショートカットに置換する"
+   },
+   "enabled": {
+      "message": "する"
+   },
+   "enabled_always": {
+      "message": "常にする"
+   },
+   "enabled_gpu": {
+      "message": "する (GPU)"
+   },
+   "enabled_onDependentMode": {
+      "message": "チャット欄に依存時のみする"
+   },
+   "enabled_wasm": {
+      "message": "する (WASM)"
+   },
+   "exception": {
+      "message": "除外"
+   },
+   "export": {
+      "message": "エクスポート"
+   },
+   "fontFactor": {
+      "message": "フォント倍率"
+   },
+   "fontFamily_fontWeight": {
+      "message": "フォント名/太さ"
+   },
+   "fontFamily_select_from_local": {
+      "message": "ローカルフォントから選択する"
+   },
+   "fontSize": {
+      "message": "文字サイズ"
+   },
+   "font_helper_select": {
+      "message": "フォントを選択してください..."
+   },
+   "hotkey": {
+      "message": "キーボードショートカット"
+   },
+   "hotkey_alt": {
+      "message": "Alt/Optionキーと同時押し"
+   },
+   "hotkey_layer": {
+      "message": "チャットレイヤ"
+   },
+   "hotkey_panel": {
+      "message": "設定パネル"
+   },
+   "hotkey_pip": {
+      "message": "PiP"
+   },
+   "pipWindowMode": {
+      "message": "PiP/Popup の表示方式"
+   },
+   "pipWindowMode_pip": {
+      "message": "既存の PiP w/ chat"
+   },
+   "pipWindowMode_popup": {
+      "message": "Popup w/ chat"
+   },
+   "import": {
+      "message": "インポート"
+   },
+   "init": {
+      "message": "リセット"
+   },
+   "label": {
+      "message": "ラベル"
+   },
+   "layerCSS": {
+      "message": "レイヤCSS"
+   },
+   "layerOpacity": {
+      "message": "全体の透過度"
+   },
+   "lineHeight": {
+      "message": "行の高さ"
+   },
+   "lines": {
+      "message": "行"
+   },
+   "livestream": {
+      "message": "ライブ"
+   },
+   "loadingMode": {
+      "message": "チャットの読み込みモード"
+   },
+   "manifestDescription": {
+      "message": "YouTube Liveのチャットをニコニコ動画・ビリビリ動画のように弾幕風に流します"
+   },
+   "manifestName": {
+      "message": "YouTube LiveChat Flusher／弾幕チャット"
+   },
+   "maxWidth_wordWrap": {
+      "message": "最大長さ/折り返し"
+   },
+   "member": {
+      "message": "メンバー"
+   },
+   "membership": {
+      "message": "メンバーシップ"
+   },
+   "menu_copyAuthorId": {
+      "message": "ユーザーIDをコピー"
+   },
+   "menu_hideAuthor": {
+      "message": "このユーザーを非表示"
+   },
+   "menu_moveMessage": {
+      "message": "メッセージを移動"
+   },
+   "menu_resumeAnimation": {
+      "message": "アニメーションを再開"
+   },
+   "message_pause": {
+      "message": "右クリックでメッセージを一時停止"
+   },
+   "milestone": {
+      "message": "マイルストーン"
+   },
+   "mode_option_chatframe_dependent": {
+      "message": "チャット欄に依存"
+   },
+   "mode_option_chatframe_independent": {
+      "message": "チャット欄に非依存"
+   },
+   "moderator": {
+      "message": "モデレーター"
+   },
+   "mutedWordsGrammer": {
+      "message": "文法"
+   },
+   "mutedWordsMode": {
+      "message": "モード"
+   },
+   "mutedWordsMode_0": {
+      "message": "オフ"
+   },
+   "mutedWordsMode_1": {
+      "message": "メッセージ全体を非表示にする"
+   },
+   "mutedWordsMode_2": {
+      "message": "キーワードを非表示にする/置換する"
+   },
+   "mutedWordsMode_3": {
+      "message": "文字を伏字にする"
+   },
+   "mutedWordsReplacement": {
+      "message": "置換文字"
+   },
+   "mutedWordsTab": {
+      "message": "NGワード"
+   },
+   "normal": {
+      "message": "通常"
+   },
+   "notification_title_onInstall": {
+      "message": "インストールありがとうございます\nクリックするとYouTubeタブを再読み込みします"
+   },
+   "notification_title_onUpdate": {
+      "message": "バージョン$1に更新されました\nクリックするとYouTubeタブを再読み込みします"
+   },
+   "opacity_0": {
+      "message": "透過"
+   },
+   "opacity_1": {
+      "message": "不透過"
+   },
+   "otherConfig": {
+      "message": "その他の設定"
+   },
+   "othersTab": {
+      "message": "その他"
+   },
+   "overlapping": {
+      "message": "オーバーラップ"
+   },
+   "overlapping_hidden": {
+      "message": "非表示"
+   },
+   "overlapping_translate": {
+      "message": "ずらす"
+   },
+   "overlapping_transparent": {
+      "message": "透過させる"
+   },
+   "owner": {
+      "message": "チャンネル管理者"
+   },
+   "person_detection": {
+      "message": "人物検出（アルファ版機能）"
+   },
+   "pip_marker": {
+      "message": "この動画はピクチャーインピクチャーで再生されています"
+   },
+   "placeholder_channelId": {
+      "message": "UCから始まる24文字のチャンネルID"
+   },
+   "placeholder_customCSS": {
+      "message": "カスタムCSS"
+   },
+   "placeholder_mutedWordsList": {
+      "message": "改行で複数のキーワードを設定できます"
+   },
+   "placeholder_mutedWordsReplacement": {
+      "message": "未指定で非表示になります"
+   },
+   "placeholder_userStyleTextArea": {
+      "message": "/* ここにCSSのプレビューが表示されます */"
+   },
+   "prefixOriginalLanguage": {
+      "message": "元の言語を文頭につける"
+   },
+   "regexp": {
+      "message": "正規表現を使用する"
+   },
+   "replay": {
+      "message": "アーカイブ"
+   },
+   "resizeLayer": {
+      "message": "レイヤサイズ変更"
+   },
+   "save": {
+      "message": "保存"
+   },
+   "show_username": {
+      "message": "ハンドル名でなくユーザー名を表示"
+   },
+   "simultaneousMessage": {
+      "message": "同時刻チャット"
+   },
+   "simultaneousMessage_0": {
+      "message": "全て流す"
+   },
+   "simultaneousMessage_1": {
+      "message": "読み込む毎に最初のチャットのみ流す"
+   },
+   "simultaneousMessage_2": {
+      "message": "同じ内容を統合する"
+   },
+   "simultaneousMessage_3": {
+      "message": "直前を含めて同じ内容を統合する"
+   },
+   "sticker": {
+      "message": "スーパーステッカー"
+   },
+   "strokeBlur": {
+      "message": "ぼかし"
+   },
+   "strokeColor": {
+      "message": "色"
+   },
+   "strokeOffset": {
+      "message": "ずれ"
+   },
+   "strokeStyle": {
+      "message": "縁取りのスタイル"
+   },
+   "suffixOriginalMessage": {
+      "message": "翻訳前のメッセージを併記する"
+   },
+   "superchat": {
+      "message": "スーパーチャット"
+   },
+   "targetLanguage": {
+      "message": "翻訳先"
+   },
+   "timeshift": {
+      "message": "タイムシフト"
+   },
+   "timeshift_note": {
+      "message": "※ アーカイブでのみ有効"
+   },
+   "tooltip_authorName": {
+      "message": "投稿者名"
+   },
+   "tooltip_authorPhoto": {
+      "message": "投稿者のサムネイル"
+   },
+   "tooltip_chatMessage": {
+      "message": "チャットメッセージ"
+   },
+   "tooltip_customColor": {
+      "message": "カスタム色"
+   },
+   "tooltip_membershipMessage": {
+      "message": "新規メンバーのメッセージ"
+   },
+   "tooltip_milestoneMonths": {
+      "message": "マイルストーンの月数"
+   },
+   "tooltip_mutedWordsReplacement": {
+      "message": "最初の1文字のみが伏字に使用されます"
+   },
+   "tooltip_purchaseAmount": {
+      "message": "金額"
+   },
+   "tooltip_sticker": {
+      "message": "ステッカー"
+   },
+   "tooltip_stickerSize": {
+      "message": "ステッカーのサイズ"
+   },
+   "translation": {
+      "message": "メッセージ翻訳"
+   },
+   "translationBlacklist": {
+      "message": "翻訳NGリスト"
+   },
+   "translationUrl": {
+      "message": "翻訳URL (GET)"
+   },
+   "translation_eagerMode": {
+      "message": "翻訳してから流す"
+   },
+   "translation_lazyMode": {
+      "message": "流しながら翻訳する"
+   },
+   "translator": {
+      "message": "翻訳モデル"
+   },
+   "translator_external": {
+      "message": "外部サービス（URL指定）"
+   },
+   "translator_fallbackNote": {
+      "message": "ローカル翻訳ができない場合は常に外部サービスへフォールバックされます。"
+   },
+   "translator_internal": {
+      "message": "ブラウザビルトイン（ローカル翻訳）"
+   },
+   "traslationTiming": {
+      "message": "タイミング"
+   },
+   "typeOfLines_0": {
+      "message": "固定"
+   },
+   "typeOfLines_1": {
+      "message": "最大"
+   },
+   "typeOfLines_2": {
+      "message": "最小"
+   },
+   "unlimited": {
+      "message": "無制限"
+   },
+   "up": {
+      "message": "上へ"
+   },
+   "userDefinedCssTab": {
+      "message": "ユーザーCSS"
+   },
+   "user_defined_css_shortcut": {
+      "message": "ショートカット"
+   },
+   "validation_channelId": {
+      "message": "各行ともUCから始まる24文字を入力してください。\n（$1行目が不正です。）"
+   },
+   "verified": {
+      "message": "確認済み"
+   },
+   "version": {
+      "message": "バージョン"
+   },
+   "warn_notSaved": {
+      "message": "保存すると拡張機能が再起動します。YouTubeを開いているタブは手動で更新が必要です。"
+   },
+   "wordWrap_0": {
+      "message": "折り返しなし"
+   },
+   "wordWrap_1": {
+      "message": "モード1"
+   },
+   "wordWrap_2": {
+      "message": "モード2"
+   },
+   "you": {
+      "message": "あなた"
+   },
+   "ytp_menuitem_label_config": {
+      "message": "チャット設定"
+   },
+   "ytp_menuitem_label_pip": {
+      "message": "PiP / Popup w/ chat"
+   },
+   "ytp_menuitem_label_switch": {
+      "message": "チャットを流す"
+   }
+}
