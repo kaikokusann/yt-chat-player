@@ -1,10 +1,9 @@
-# YT Chat Player
+# YTFlow
 
 Android 上で快適に YouTube を視聴するための専用ブラウザアプリです。
 Mozilla の強力なブラウザエンジン「GeckoView」をベースにしており、チャット欄や不要な要素を自動的に整理・クリーンアップし、ライブチャットのオーバーレイ表示などをサポートします。
 
 ## 主な機能
-- **バックグラウンド再生**: アプリを閉じても、画面をオフにしても YouTube の音声をバックグラウンドで再生し続けます。
 - **ピクチャーインピクチャー (PiP)**: 他のアプリを使いながら小窓で動画を視聴できます。
 - **LiveChat Flusher の統合**: ライブ配信のチャットをニコニコ動画のように動画上に流す拡張機能を標準搭載しています。
 - **公式アプリとのシームレスな連携**: 視聴中の動画の「続き（秒数付き）」からワンタップで YouTube 公式アプリを開けます。
@@ -14,8 +13,8 @@ Mozilla の強力なブラウザエンジン「GeckoView」をベースにして
 本プロジェクトは Android Studio を使用してビルドできます。
 
 ```bash
-git clone https://github.com/[YOUR_USERNAME]/yt-chat-player.git
-cd yt-chat-player
+git clone https://github.com/[YOUR_USERNAME]/ytflow-android.git
+cd ytflow-android
 ./gradlew installDebug
 ```
 
