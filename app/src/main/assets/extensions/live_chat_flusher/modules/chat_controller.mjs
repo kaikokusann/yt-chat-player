@@ -16,8 +16,275 @@ export const SimultaneousModeEnum = Object.freeze({
 	LAST_MERGE: 3,
 });
 
+const APP_NORMAL_CHAT_KEY = 'ytlcf-app-normal-chat-enabled';
+const APP_NORMAL_CHAT_FONT_SCALE_KEY = 'ytlcf-app-normal-chat-font-scale';
+const APP_NORMAL_CHAT_SHOW_PHOTO_KEY = 'ytlcf-app-normal-chat-show-photo';
+const NORMAL_CHAT_PHOTO_PARTS = Object.freeze([
+	['normal', 'normal'],
+	['member', 'member'],
+	['moderator', 'moderator'],
+	['owner', 'owner'],
+	['verified', 'verified'],
+	['superchat', 'paid_message'],
+	['supersticker', 'paid_sticker'],
+	['milestone', 'milestone'],
+	['membership', 'membership'],
+]);
+
+class NormalChatView {
+	/** @type {HTMLDivElement} */
+	element;
+	/** @type {ShadowRoot} */
+	root;
+	/** @type {HTMLDivElement} */
+	list;
+	enabled = false;
+	limit = 60;
+	showPhoto = true;
+
+	constructor() {
+		this.element = document.createElement('div');
+		this.element.id = 'yt-lcf-normal-chat';
+		this.root = this.element.attachShadow({ mode: 'closed' });
+		const style = document.createElement('style');
+		style.textContent = `
+			:host {
+				--yt-lcf-normal-chat-font-size: 24px;
+				background: #fff;
+				box-sizing: border-box;
+				color: #0f0f0f;
+				display: none;
+				font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				font-size: var(--yt-lcf-normal-chat-font-size);
+				inset: 0;
+				line-height: 1.45;
+				overflow: hidden;
+				padding: 14px 14px 18px;
+				position: fixed;
+				z-index: 2147483646;
+			}
+			:host(.enabled) {
+				display: block;
+			}
+			.list {
+				box-sizing: border-box;
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				height: 100%;
+				justify-content: flex-end;
+				overflow: hidden;
+				width: 100%;
+			}
+			.list > div {
+				animation: none !important;
+				box-sizing: border-box;
+				color: #0f0f0f;
+				left: auto !important;
+				line-height: 1.45;
+				max-width: none !important;
+				opacity: 1 !important;
+				overflow: visible;
+				padding: 7px 6px;
+				position: static !important;
+				text-shadow: none !important;
+				text-overflow: clip;
+				transform: none !important;
+				-webkit-text-stroke: 0 !important;
+				white-space: normal;
+				width: 100%;
+				z-index: auto !important;
+			}
+			.text .header,
+			.text .body {
+				display: inline;
+			}
+			.header {
+				align-items: center;
+			}
+			a {
+				color: inherit;
+				pointer-events: none;
+				text-decoration: none;
+			}
+			.photo {
+				border-radius: 50%;
+				height: 1.4em;
+				margin-right: .35em;
+				object-fit: cover;
+				vertical-align: -.32em;
+				width: 1.4em;
+			}
+			:host(.hide-photo) .photo {
+				display: none !important;
+			}
+			.normal-chat-photo-hidden .photo {
+				display: none !important;
+			}
+			.name {
+				color: #16802a;
+				font-weight: 750;
+				margin-right: .35em;
+			}
+			.body {
+				color: #111;
+				overflow: visible;
+			}
+			.body img,
+			.body svg,
+			.sticker {
+				height: 1.15em;
+				object-fit: contain;
+				vertical-align: -.18em;
+				width: 1.15em;
+			}
+			.superchat,
+			.supersticker,
+			.membership,
+			.gift,
+			.engagement-poll {
+				border-radius: 10px;
+				overflow: hidden;
+				padding: 0 !important;
+			}
+			.superchat .header,
+			.supersticker .header,
+			.membership .header {
+				display: flex;
+				padding: 8px 10px 4px;
+			}
+			.superchat .body,
+			.supersticker .body,
+			.membership .body,
+			.engagement-poll .body {
+				display: block;
+				padding: 4px 10px 9px;
+			}
+		`;
+		this.list = document.createElement('div');
+		this.list.className = 'list';
+		this.root.append(style, this.list);
+		this.syncFromStorage();
+	}
+
+	syncFromStorage() {
+		this.setEnabled(readBooleanLocalStorage(APP_NORMAL_CHAT_KEY, false));
+		this.setFontScale(readNumberLocalStorage(APP_NORMAL_CHAT_FONT_SCALE_KEY, 100));
+		this.setShowPhoto(readBooleanLocalStorage(APP_NORMAL_CHAT_SHOW_PHOTO_KEY, true));
+		this.refreshDisplaySettings();
+	}
+
+	/**
+	 * @param {boolean} enabled
+	 */
+	setEnabled(enabled) {
+		this.enabled = enabled;
+		this.element.classList.toggle('enabled', enabled);
+		if (!enabled) this.clear();
+	}
+
+	/**
+	 * @param {number} scale
+	 */
+	setFontScale(scale) {
+		const normalized = Math.min(220, Math.max(70, Number.isFinite(scale) ? scale : 100));
+		const px = Math.round(24 * normalized / 100);
+		this.element.style.setProperty('--yt-lcf-normal-chat-font-size', `${px}px`);
+	}
+
+	/**
+	 * @param {boolean} showPhoto
+	 */
+	setShowPhoto(showPhoto) {
+		this.showPhoto = showPhoto;
+		this.element.classList.toggle('hide-photo', !showPhoto);
+	}
+
+	/**
+	 * @param {HTMLElement} source
+	 */
+	add(source) {
+		if (!this.enabled) return;
+		const existing = source.id ? this.root.getElementById(source.id) : null;
+		existing?.remove();
+		const item = /** @type {HTMLElement} */ (source.cloneNode(true));
+		item.removeAttribute('style');
+		this.applyDisplaySettings(item);
+		this.list.append(item);
+		this.trim();
+	}
+
+	/**
+	 * @param {string} id
+	 */
+	delete(id) {
+		if (!id) return false;
+		const target = this.root.getElementById(id);
+		target?.remove();
+		return Boolean(target);
+	}
+
+	/**
+	 * @param {string} id
+	 */
+	deleteByAuthor(id) {
+		if (!id) return false;
+		let removed = false;
+		for (const item of this.root.querySelectorAll(`[data-author-id="${CSS.escape(id)}"]`)) {
+			item.remove();
+			removed = true;
+		}
+		return removed;
+	}
+
+	clear() {
+		this.list.replaceChildren();
+	}
+
+	refreshDisplaySettings() {
+		for (const item of this.list.children) {
+			this.applyDisplaySettings(/** @type {HTMLElement} */ (item));
+		}
+	}
+
+	/**
+	 * @param {HTMLElement} item
+	 */
+	applyDisplaySettings(item) {
+		const photoPart = NORMAL_CHAT_PHOTO_PARTS.find(([className]) => item.classList.contains(className))?.[1];
+		const showByFlusher = photoPart ? s.parts[photoPart]?.photo !== false : true;
+		item.classList.toggle('normal-chat-photo-hidden', !this.showPhoto || !showByFlusher);
+	}
+
+	trim() {
+		while (this.list.childElementCount > this.limit) {
+			this.list.firstElementChild?.remove();
+		}
+	}
+}
+
+function readBooleanLocalStorage(key, fallback) {
+	try {
+		const value = localStorage.getItem(key);
+		if (value == null) return fallback;
+		return value === '1';
+	} catch (_error) {
+		return fallback;
+	}
+}
+
+function readNumberLocalStorage(key, fallback) {
+	try {
+		const value = Number.parseInt(localStorage.getItem(key) || '', 10);
+		return Number.isFinite(value) ? value : fallback;
+	} catch (_error) {
+		return fallback;
+	}
+}
+
 export class LiveChatController {
 	#skip = false;
+	#isLive = false;
 
 	/** @type {?VideoSegmentationExecutor} */
 	segmenter = null;
@@ -29,6 +296,7 @@ export class LiveChatController {
 		this.player = player;
 
 		this.layer = new LiveChatLayer(this);
+		this.normalChat = new NormalChatView();
 		const root = this.layer.root;
 		this.layoutCache = new LiveChatLayoutCache(root);
 		this.itemFactory = new LiveChatItemFactory();
@@ -66,6 +334,9 @@ export class LiveChatController {
 		this.panel = new LiveChatPanel(this);
 		this.contextmenu = new LiveChatContextMenu();
 		this.abortController = new AbortController();
+		const syncNormalChat = () => this.applyNormalChatSettings();
+		window.addEventListener('storage', syncNormalChat, { passive: true });
+		window.addEventListener('ytlcf-normal-chat-change', syncNormalChat, { passive: true });
 	}
 
 	async start() {
@@ -84,8 +355,10 @@ export class LiveChatController {
 		await this.panel.createForm();
 
 		document.getElementById(this.layer.element.id)?.remove();
+		document.getElementById(this.normalChat.element.id)?.remove();
 		if (s.others.disabled) this.layer.hide();
 		videoContainer.after(this.layer.element);
+		this.layer.element.after(this.normalChat.element);
 
 		const promises = [
 			// fetching your channel ID and set styles for you
@@ -100,6 +373,7 @@ export class LiveChatController {
 		this.#setupPanel();
 		this.layer.element.style.cssText += '--yt-lcf-layer-css: below;' + s.styles.layer_css;
 		await Promise.allSettled(promises);
+		this.applyNormalChatSettings();
 		this.#startSendingFrame(video);
 	}
 
@@ -493,13 +767,56 @@ export class LiveChatController {
 	}
 
 	/**
+	 * @param {boolean} isLive
+	 */
+	setPlaybackKind(isLive) {
+		this.#isLive = isLive;
+		this.applyNormalChatSettings();
+	}
+
+	applyNormalChatSettings() {
+		this.normalChat.syncFromStorage();
+		if (this.normalChat.enabled) {
+			this.layer.hide();
+			this.layoutCache.clear();
+		} else {
+			if (!s.others.disabled) this.layer.show();
+			return;
+		}
+		const video = /** @type {?HTMLVideoElement} */ (this.player.querySelector('#movie_player video') || document.querySelector('#movie_player video') || document.querySelector('video'));
+		const player = document.querySelector('#movie_player');
+		if (this.#isLive) {
+			try {
+				if (player && typeof player.pauseVideo === 'function') {
+					player.pauseVideo();
+					return;
+				}
+			} catch (_error) {
+				// Fall back to the media element below.
+			}
+			try { video?.pause(); } catch (_error) {}
+		} else {
+			try {
+				if (player && typeof player.playVideo === 'function') {
+					player.playVideo();
+					return;
+				}
+			} catch (_error) {
+				// Fall back to the media element below.
+			}
+			try { video?.play(); } catch (_error) {}
+		}
+	}
+
+	/**
 	 * Fires chat actions.
 	 * @param {CustomEvent<LiveChat.LiveChatItemAction[]>} event
 	 */
 	async #onAction(event) {
 		const le = this.layer.element;
 		const root = this.layer.root;
-		if ((isNotPip() && document.visibilityState === 'hidden') || le.hidden || le.parentElement?.classList.contains('paused-mode')) return;
+		const normalChatEnabled = this.normalChat.enabled;
+		if ((isNotPip() && document.visibilityState === 'hidden') || (!normalChatEnabled && (le.hidden || le.parentElement?.classList.contains('paused-mode')))) return;
 
 		/** @type {Record<string, LiveChat.LiveChatItemAction[]>} */
 		const filtered = { add: [], delete: [], delete_author: [], replace: [] };
@@ -574,6 +891,8 @@ export class LiveChatController {
 		}
 		return renderChatItem(item, this.itemFactory).then(el => {
 			if (!el) return;
+			this.normalChat.add(el);
+			if (this.normalChat.enabled) return;
 			callback(el);
 			if (this.layer.root.getElementById(el.id)) {
 				logger.debug('Skipped rendering chat item (already exists on the layer):', `#${el.id}`);
@@ -591,10 +910,11 @@ export class LiveChatController {
 	#deleteChatItem(action) {
 		// @ts-expect-error
 		const id = action.markChatItemAsDeletedAction.targetItemId;
+		const deletedFromNormalChat = this.normalChat.delete(id);
 		if (this.layoutCache.delete(id).some(v => v)) {
 			const target = this.layer.root.getElementById(id);
 			target?.remove();
-		} else {
+		} else if (!deletedFromNormalChat) {
 			logger.warn(`Failed to delete message: #${id}`);
 		}
 	}
@@ -605,10 +925,14 @@ export class LiveChatController {
 	#deleteChatItemByAuthor(action) {
 		// @ts-expect-error
 		const id = action.markChatItemsByAuthorAsDeletedAction.externalChannelId;
+		const deletedFromNormalChat = this.normalChat.deleteByAuthor(id);
 		const targets = this.layer.root.querySelectorAll(`[data-author-id="${id}"]`);
 		for (const target of targets) {
 			this.layoutCache.delete(target.id);
 			target.remove();
+		}
+		if (!deletedFromNormalChat && targets.length === 0) {
+			logger.warn(`Failed to delete messages by author: #${id}`);
 		}
 	}
 
@@ -620,10 +944,12 @@ export class LiveChatController {
 		const id = action.replaceChatItemAction.targetItemId;
 		const target = this.layer.root.getElementById(id);
 		const item = action.replaceChatItemAction?.replacementItem;
-		if (target && item) {
+		if ((target || this.normalChat.enabled) && item) {
 			renderChatItem(item, this.itemFactory).then(el => {
 				if (!el) return;
-				target.replaceWith(el);
+				this.normalChat.delete(id);
+				this.normalChat.add(el);
+				target?.replaceWith(el);
 			}).catch(logger.warn);
 		} else {
 			logger.warn(`Failed to replace message: #${id}`);
@@ -663,5 +989,6 @@ export class LiveChatController {
 	close() {
 		this.unlisten();
 		this.layer.clear();
+		this.normalChat.clear();
 	}
 }

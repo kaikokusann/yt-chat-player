@@ -127,6 +127,7 @@ async function onYtNavigateFinish(e) {
 		title: videoDetails.title || getText(mainResponse.playerOverlays?.playerOverlayRenderer?.videoDetails?.playerOverlayVideoDetailsRenderer?.title),
 	};
 	state.isLive = videoDetails?.isLive || videoDetails?.isUpcoming || false;
+	state.controller?.setPlaybackKind(state.isLive);
 
 	const videoType = state.isLive ? 'livestream' : 'replay';
 	const modeValue = store.others?.[`mode_${videoType}`] ?? FetchingModeEnum.INDEPENDENT;

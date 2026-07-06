@@ -89,6 +89,7 @@ class MainActivity : Activity() {
     private var videoCanGoForward = false
     private var chatCanGoBack = false
     private var chatCanGoForward = false
+    private var chatSessionOpen = false
     private val videoHistory = mutableListOf<String>()
     private var fullScreen = false
     private var inPictureInPicture = false
@@ -99,9 +100,12 @@ class MainActivity : Activity() {
     private var youtubeChatCleanerEnabled = true
     private var liveChatFlusherEnabled = true
     private var chatOnlyModeEnabled = false
+    private var chatOnlyWatchModeActive = false
     private var pausePlaybackOnPipClose = true
     private var suppressFailedPageStopUntil = 0L
     private var currentOsFps = 0
+    private var normalChatFontScale = 100
+    private var normalChatShowIcon = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,6 +119,8 @@ class MainActivity : Activity() {
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
         pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
         currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
+        normalChatFontScale = prefs.getInt(PREF_NORMAL_CHAT_FONT_SCALE, 100)
+        normalChatShowIcon = prefs.getBoolean(PREF_NORMAL_CHAT_SHOW_ICON, true)
         applyEffectiveOsFps(showToast = false)
         setContentView(createUi())
         createBrowser()
@@ -152,7 +158,7 @@ class MainActivity : Activity() {
                 runCatching { runtime.webExtensionController.setTabActive(videoSession, false) }
                 runCatching { videoSession.close() }
             }
-            if (::chatSession.isInitialized) {
+            if (::chatSession.isInitialized && chatSessionOpen) {
                 runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
                 runCatching { chatSession.close() }
             }
@@ -502,6 +508,30 @@ class MainActivity : Activity() {
             },
         ))
 
+        root.addView(materialActionCard(
+            context = context,
+            title = "通常チャット文字サイズ",
+            summary = "現在: ${normalChatFontScale}%",
+            actionLabel = "変更",
+            onClick = {
+                dialog.dismiss()
+                showNormalChatFontSizeDialog()
+            }
+        ))
+
+        root.addView(materialSwitchCard(
+            context = context,
+            title = "通常チャットのアイコン",
+            summary = "チャット行のユーザーアイコンを表示",
+            isChecked = normalChatShowIcon,
+            onCheckedChange = { checked ->
+                normalChatShowIcon = checked
+                prefs.edit().putBoolean(PREF_NORMAL_CHAT_SHOW_ICON, checked).apply()
+                applyNormalChatModeToPage(chatOnlyModeEnabled)
+                status.text = "通常チャットのアイコン: ${if (checked) "ON" else "OFF"}"
+            },
+        ))
+
         root.addView(materialSwitchCard(
             context = context,
             title = "PiPを×で閉じたら一時停止",
@@ -714,6 +744,73 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    private fun showNormalChatFontSizeDialog() {
+        val options = arrayOf("小さめ 90%", "標準 100%", "大きめ 115%", "かなり大きめ 130%", "特大 150%")
+        val values = intArrayOf(90, 100, 115, 130, 150)
+        val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
+        val context = dialog.context
+        val controlTint = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(Color.parseColor("#FF0033"), Color.parseColor("#9A949D")),
+        )
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(10), dp(20), dp(24))
+        }
+        root.addView(View(context).apply {
+            background = roundedDrawable(Color.parseColor("#5E5E5E"), 2)
+        }, LinearLayout.LayoutParams(dp(44), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(18)
+        })
+        root.addView(TextView(context).apply {
+            text = "通常チャット文字サイズ"
+            textSize = 22f
+            setTextColor(Color.parseColor("#F5F5F5"))
+            includeFontPadding = false
+        })
+        root.addView(TextView(context).apply {
+            text = "通常チャット専用モードの文字サイズを変更します。"
+            textSize = 12f
+            setTextColor(Color.parseColor("#A8A8A8"))
+            setPadding(0, dp(6), 0, dp(12))
+        })
+        options.forEachIndexed { index, label ->
+            root.addView(MaterialRadioButton(context).apply {
+                text = label
+                textSize = 16f
+                setTextColor(Color.parseColor("#F5F5F5"))
+                buttonTintList = controlTint
+                isChecked = values[index] == normalChatFontScale
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    normalChatFontScale = values[index]
+                    prefs.edit().putInt(PREF_NORMAL_CHAT_FONT_SCALE, normalChatFontScale).apply()
+                    applyNormalChatModeToPage(chatOnlyModeEnabled)
+                    status.text = "通常チャット文字サイズ: ${normalChatFontScale}%"
+                    dialog.dismiss()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
+        }
+        root.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "キャンセル"
+            minHeight = dp(40)
+            minimumHeight = dp(40)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+            gravity = Gravity.END
+        })
+
+        dialog.setContentView(root)
+        dialog.setOnShowListener {
+            dialog.behavior.skipCollapsed = true
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
+    }
+
     private fun applyOsFps(fps: Int, showToast: Boolean = false) {
         // モバイルセッション（ホームや検索画面）表示中は制限を無効（0）にする
         val targetFps = if (activeSurface == BrowserSurface.MOBILE) 0 else fps
@@ -726,7 +823,7 @@ class MainActivity : Activity() {
     }
 
     private fun applyEffectiveOsFps(showToast: Boolean = false) {
-        val forcedForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT
+        val forcedForChatOnly = chatOnlyModeEnabled && (activeSurface == BrowserSurface.CHAT || chatOnlyWatchModeActive)
         val fps = if (forcedForChatOnly) {
             CHAT_ONLY_FORCED_FPS
         } else {
@@ -798,14 +895,11 @@ class MainActivity : Activity() {
         )
         mobileSession = createManagedSession(BrowserSurface.MOBILE, BrowserMode.MOBILE)
         videoSession = createManagedSession(BrowserSurface.VIDEO, BrowserMode.DESKTOP)
-        chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
         mobileSession.open(runtime)
         videoSession.open(runtime)
-        chatSession.open(runtime)
         geckoView.setSession(mobileSession)
         runtime.webExtensionController.setTabActive(mobileSession, true)
         runtime.webExtensionController.setTabActive(videoSession, false)
-        runtime.webExtensionController.setTabActive(chatSession, false)
     }
 
     private fun createManagedSession(surface: BrowserSurface, initialMode: BrowserMode): GeckoSession {
@@ -888,6 +982,7 @@ class MainActivity : Activity() {
                         })();
                     """.trimIndent()
                     session.loadUri("javascript:${Uri.encode(script)}")
+                    applyNormalChatModeToPage(chatOnlyModeEnabled)
                 }
             }
         }
@@ -1212,7 +1307,7 @@ class MainActivity : Activity() {
         when (surface) {
             BrowserSurface.MOBILE -> mobileSession
             BrowserSurface.VIDEO -> videoSession
-            BrowserSurface.CHAT -> chatSession
+            BrowserSurface.CHAT -> ensureChatSession()
         }
 
     private fun updateSurfaceUrl(surface: BrowserSurface, url: String) {
@@ -1238,6 +1333,7 @@ class MainActivity : Activity() {
         }
 
     private fun loadUrlInto(surface: BrowserSurface, url: String, replaceHistory: Boolean = false) {
+        if (surface == BrowserSurface.CHAT) ensureChatSession()
         val targetUrl = withAppFlags(url)
         updateSurfaceUrl(surface, url)
         if (surface == activeSurface) address.setText(url)
@@ -1402,6 +1498,7 @@ class MainActivity : Activity() {
         if (surface == BrowserSurface.MOBILE && chatOnlyModeEnabled) {
             setChatOnlyMode(false)
         }
+        if (surface == BrowserSurface.CHAT) ensureChatSession()
 
         val oldSession = activeSession()
         if (activeSurface == BrowserSurface.VIDEO && surface == BrowserSurface.MOBILE) {
@@ -1476,7 +1573,9 @@ class MainActivity : Activity() {
                 setChatOnlyMode(false)
             }
             BrowserSurface.VIDEO -> {
-                if (videoHistory.size > 1 && videoCanGoBack) {
+                if (chatOnlyWatchModeActive) {
+                    setChatOnlyMode(false)
+                } else if (videoHistory.size > 1 && videoCanGoBack) {
                     videoSession.goBack()
                 } else {
                     pauseVideoPlayback()
@@ -1713,7 +1812,7 @@ class MainActivity : Activity() {
 
     private fun updateChromeForPictureInPicture() {
         val hideChrome = fullScreen || inPictureInPicture
-        val hideForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT
+        val hideForChatOnly = chatOnlyModeEnabled && (activeSurface == BrowserSurface.CHAT || chatOnlyWatchModeActive)
         topBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         status.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         navBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
@@ -1883,7 +1982,9 @@ class MainActivity : Activity() {
     private fun setChatOnlyMode(enabled: Boolean) {
         if (enabled && activeSurface != BrowserSurface.VIDEO) {
             chatOnlyModeEnabled = false
+            chatOnlyWatchModeActive = false
             prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
+            applyNormalChatModeToPage(false)
             status.text = "通常チャット専用モードは動画画面でオンにしてください"
             applyEffectiveOsFps(showToast = false)
             updateChromeForPictureInPicture()
@@ -1892,19 +1993,20 @@ class MainActivity : Activity() {
 
         if (enabled) {
             chatOnlyModeEnabled = true
+            chatOnlyWatchModeActive = true
             prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
-            status.text = "チャットURLを取得中"
+            status.text = "通常チャット専用モード: ON"
+            applyNormalChatModeToPage(true)
             applyEffectiveOsFps(showToast = false)
             updateChromeForPictureInPicture()
-            applyChatOnlyModeToPage(true)
-            requestChatOnlyUrlFromVideoPage()
             return
         }
 
         chatOnlyModeEnabled = enabled
+        chatOnlyWatchModeActive = false
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
         status.text = "通常チャット専用モード: OFF"
-        applyChatOnlyModeToPage(false)
+        applyNormalChatModeToPage(false)
         if (activeSurface == BrowserSurface.CHAT) {
             switchToSurface(BrowserSurface.VIDEO)
         }
@@ -1997,10 +2099,9 @@ class MainActivity : Activity() {
                   liveChatRenderer?.continuations?.[0]?.reloadContinuationData?.continuation;
                 if (!continuation) return '';
                 const path = liveChatRenderer?.isReplay ? '/live_chat_replay' : '/live_chat';
-                const url = new URL(path, 'https://www.youtube.com');
-                url.searchParams.set('continuation', continuation);
-                url.searchParams.set('is_popout', '1');
-                return url.toString();
+                // YouTubeのcontinuationは既にURL向けにエスケープされた形で入っている。
+                // URLSearchParamsを通すと %3D が %253D になり、replay chatが空になる。
+                return `https://www.youtube.com${'$'}{path}?continuation=${'$'}{continuation}&is_popout=1`;
               };
 
               const headerText = () => {
@@ -2090,65 +2191,72 @@ class MainActivity : Activity() {
         }
 
         val kind = playbackKind ?: chatPlaybackKindForUrl(normalized)
+        Log.i(TAG, "Opening chat-only URL: kind=$kind url=$normalized")
         chatOnlyModeEnabled = true
+        chatOnlyWatchModeActive = true
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
-
-        if (kind == "live") {
-            pauseVideoPlayback()
-        } else if (kind == "archive") {
-            setVideoPlaybackPaused(false)
-        }
-
-        resetChatSessionForChatOnly()
-        switchToSurface(BrowserSurface.CHAT)
-        applyBrowserMode(BrowserSurface.CHAT, BrowserMode.DESKTOP)
-        loadUrlInto(BrowserSurface.CHAT, normalized, replaceHistory = true)
+        applyNormalChatModeToPage(true)
         applyEffectiveOsFps(showToast = false)
         updateChromeForPictureInPicture()
         status.text = "通常チャット専用モード: ON"
     }
 
     private fun resetChatSessionForChatOnly() {
-        if (::chatSession.isInitialized) {
+        if (::chatSession.isInitialized && chatSessionOpen) {
             runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
             runCatching { chatSession.stop() }
             runCatching { chatSession.close() }
         }
         chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
         chatSession.open(runtime)
+        chatSessionOpen = true
         chatMode = BrowserMode.DESKTOP
         chatCanGoBack = false
         chatCanGoForward = false
     }
 
     private fun stopChatOnlySession() {
-        if (!::runtime.isInitialized || !::chatSession.isInitialized) return
+        if (!::runtime.isInitialized || !::chatSession.isInitialized || !chatSessionOpen) {
+            chatUrl = ""
+            return
+        }
         runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
         runCatching { chatSession.stop() }
         runCatching { chatSession.close() }
-        chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
-        chatSession.open(runtime)
+        chatSessionOpen = false
         chatMode = BrowserMode.DESKTOP
         chatCanGoBack = false
         chatCanGoForward = false
         chatUrl = ""
-        runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
     }
 
-    private fun applyChatOnlyModeToPage(enabled: Boolean) {
+    private fun ensureChatSession(): GeckoSession {
+        if (!::chatSession.isInitialized || !chatSessionOpen) {
+            chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
+            chatSession.open(runtime)
+            chatSessionOpen = true
+            chatMode = BrowserMode.DESKTOP
+            chatCanGoBack = false
+            chatCanGoForward = false
+            runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
+        }
+        return chatSession
+    }
+
+    private fun applyNormalChatModeToPage(enabled: Boolean) {
         if (!::videoSession.isInitialized) return
         val value = if (enabled) "1" else "0"
+        val showIconValue = if (normalChatShowIcon) "1" else "0"
         val script = """
             (() => {
-              try { localStorage.setItem('ytcc-app-chat-only-enabled', '$value'); } catch (_) {}
-              window.dispatchEvent(new Event('ytcc-chat-only-change'));
+              try { localStorage.setItem('ytlcf-app-normal-chat-enabled', '$value'); } catch (_) {}
+              try { localStorage.setItem('ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
+              try { localStorage.setItem('ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
+              window.dispatchEvent(new Event('ytlcf-normal-chat-change'));
               window.dispatchEvent(new Event('resize'));
             })()
         """.trimIndent()
         videoSession.loadUri("javascript:${Uri.encode(script)}")
-        if (::chatSession.isInitialized) {
-            chatSession.loadUri("javascript:${Uri.encode(script)}")
-        }
     }
 
     private fun withAppFlags(rawUrl: String): String {
@@ -2355,6 +2463,8 @@ class MainActivity : Activity() {
         private const val PREF_LCF_ENABLED = "lcf_enabled"
         private const val PREF_CHAT_ONLY_MODE = "chat_only_mode"
         private const val PREF_PAUSE_ON_PIP_CLOSE = "pause_on_pip_close"
+        private const val PREF_NORMAL_CHAT_FONT_SCALE = "normal_chat_font_scale"
+        private const val PREF_NORMAL_CHAT_SHOW_ICON = "normal_chat_show_icon"
         private const val CHAT_ONLY_FORCED_FPS = 15
         private const val PREF_LAST_VIDEO_URL = "last_video_url"
         private const val PREF_LAST_VIDEO_TIME = "last_video_time"
