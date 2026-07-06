@@ -5,6 +5,11 @@ import { LiveChatItemFactory, renderChatItem } from './chat_message.mjs';
 
 let started = false;
 
+const NORMAL_CHAT_INTERVAL_KEY = 'ytlcf-app-normal-chat-interval-ms';
+const NORMAL_CHAT_INTERVAL_ATTR = 'data-ytlcf-app-normal-chat-interval-ms';
+const DEFAULT_NORMAL_CHAT_INTERVAL_MS = 100;
+const MAX_QUEUE_GROUPS = 800;
+
 export async function initializeNormalChatPage() {
 	if (started || !isEnabled()) return;
 	started = true;
@@ -19,9 +24,10 @@ export async function initializeNormalChatPage() {
 	document.body.append(view.element);
 	installPageStyle();
 	installSettingsSync(view);
+	const pacer = new NormalChatActionPacer(view, factory);
 
 	document.addEventListener('ytlcf-action', event => {
-		handleActions(event.detail || [], view, factory);
+		pacer.enqueue(event.detail || []);
 	}, { passive: true });
 
 	const searchParams = new URL(location.href).searchParams;
@@ -37,15 +43,13 @@ export async function initializeNormalChatPage() {
 				auth: false,
 				offset: Number.isFinite(initialOffset) ? initialOffset : 0,
 			})) {
-				const actions = [];
 				for (const container of containers || []) {
-					actions.push(...(container.replayChatItemAction?.actions || []));
+					pacer.enqueue(container.replayChatItemAction?.actions || []);
 				}
-				handleActions(actions, view, factory);
 			}
 		} else {
 			for await (const actions of getLiveChatActionsAsyncIterable(abortController.signal, continuation, { auth: false })) {
-				handleActions(actions || [], view, factory);
+				pacer.enqueue(actions || []);
 			}
 		}
 	} catch (error) {
@@ -56,6 +60,7 @@ export async function initializeNormalChatPage() {
 function applyUrlSettings() {
 	const params = getAppParams();
 	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_font_scale', 'ytlcf-app-normal-chat-font-scale', 'data-ytlcf-app-normal-chat-font-scale');
+	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_interval_ms', NORMAL_CHAT_INTERVAL_KEY, NORMAL_CHAT_INTERVAL_ATTR);
 	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_show_name', 'ytlcf-app-normal-chat-show-name', 'data-ytlcf-app-normal-chat-show-name');
 	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_show_photo', 'ytlcf-app-normal-chat-show-photo', 'data-ytlcf-app-normal-chat-show-photo');
 }
@@ -81,6 +86,7 @@ function installSettingsSync(view) {
 		attributeFilter: [
 			'data-ytlcf-app-normal-chat-enabled',
 			'data-ytlcf-app-normal-chat-font-scale',
+			NORMAL_CHAT_INTERVAL_ATTR,
 			'data-ytlcf-app-normal-chat-show-name',
 			'data-ytlcf-app-normal-chat-show-photo',
 		],
@@ -125,6 +131,66 @@ function installPageStyle() {
 		}
 	`;
 	document.documentElement.append(style);
+}
+
+class NormalChatActionPacer {
+	constructor(view, factory) {
+		this.view = view;
+		this.factory = factory;
+		/** @type {LiveChat.LiveChatItemAction[][]} */
+		this.queue = [];
+		this.running = false;
+	}
+
+	/**
+	 * @param {LiveChat.LiveChatItemAction[]} actions
+	 */
+	enqueue(actions) {
+		if (!Array.isArray(actions) || actions.length === 0) return;
+		this.queue.push(actions);
+		if (this.queue.length > MAX_QUEUE_GROUPS) {
+			this.queue.splice(0, this.queue.length - MAX_QUEUE_GROUPS);
+		}
+		this.start();
+	}
+
+	async start() {
+		if (this.running) return;
+		this.running = true;
+		try {
+			while (this.queue.length > 0) {
+				const actions = this.queue.shift() || [];
+				await handleActions(actions, this.view, this.factory);
+				const intervalMs = readIntervalMs();
+				if (intervalMs > 0 && this.queue.length > 0) {
+					await sleep(intervalMs);
+				}
+			}
+		} finally {
+			this.running = false;
+			if (this.queue.length > 0) this.start();
+		}
+	}
+}
+
+function readIntervalMs() {
+	try {
+		const attrValue = document.documentElement.getAttribute(NORMAL_CHAT_INTERVAL_ATTR);
+		if (attrValue != null) return normalizeIntervalMs(attrValue);
+		const storageValue = localStorage.getItem(NORMAL_CHAT_INTERVAL_KEY);
+		if (storageValue != null) return normalizeIntervalMs(storageValue);
+	} catch (_error) {}
+	return DEFAULT_NORMAL_CHAT_INTERVAL_MS;
+}
+
+function normalizeIntervalMs(value) {
+	const number = Number.parseInt(String(value), 10);
+	if (!Number.isFinite(number)) return DEFAULT_NORMAL_CHAT_INTERVAL_MS;
+	return Math.min(1000, Math.max(0, number));
+}
+
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function handleActions(actions, view, factory) {

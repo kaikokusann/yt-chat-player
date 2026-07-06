@@ -10,6 +10,7 @@
   const STRIP_ONLY_APP_PARAMS = [
     'ytcc_app_chat_only',
     'ytcc_app_normal_chat_font_scale',
+    'ytcc_app_normal_chat_interval_ms',
     'ytcc_app_normal_chat_show_name',
     'ytcc_app_normal_chat_show_photo'
   ];

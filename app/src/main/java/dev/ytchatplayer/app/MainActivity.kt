@@ -72,6 +72,7 @@ class MainActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var btnFullscreen: ImageButton
     private lateinit var btnNormalChatFont: Button
+    private lateinit var btnNormalChatInterval: Button
     private lateinit var btnNormalChatName: Button
     private lateinit var btnNormalChatIcon: Button
 
@@ -107,6 +108,7 @@ class MainActivity : Activity() {
     private var suppressFailedPageStopUntil = 0L
     private var currentOsFps = 0
     private var normalChatFontScale = DEFAULT_NORMAL_CHAT_FONT_SCALE
+    private var normalChatIntervalMs = DEFAULT_NORMAL_CHAT_INTERVAL_MS
     private var normalChatShowName = true
     private var normalChatShowIcon = true
 
@@ -123,6 +125,7 @@ class MainActivity : Activity() {
         pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
         currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
         normalChatFontScale = prefs.getInt(PREF_NORMAL_CHAT_FONT_SCALE, DEFAULT_NORMAL_CHAT_FONT_SCALE)
+        normalChatIntervalMs = prefs.getInt(PREF_NORMAL_CHAT_INTERVAL_MS, DEFAULT_NORMAL_CHAT_INTERVAL_MS)
         normalChatShowName = prefs.getBoolean(PREF_NORMAL_CHAT_SHOW_NAME, true)
         normalChatShowIcon = prefs.getBoolean(PREF_NORMAL_CHAT_SHOW_ICON, true)
         applyEffectiveOsFps(showToast = false)
@@ -437,6 +440,21 @@ class MainActivity : Activity() {
             btnNormalChatFont,
             LinearLayout.LayoutParams(dp(58), dp(44)).apply { marginEnd = dp(4) },
         )
+        btnNormalChatInterval = toolbarButton(
+            label = "",
+            onClick = { cycleNormalChatInterval() },
+            onLongClick = {
+                showNormalChatIntervalDialog()
+                true
+            },
+        ).apply {
+            textSize = 11f
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+        }
+        chatOnlyBar.addView(
+            btnNormalChatInterval,
+            LinearLayout.LayoutParams(dp(58), dp(44)).apply { marginEnd = dp(4) },
+        )
         btnNormalChatName = toolbarButton("名", onClick = { setNormalChatShowName(!normalChatShowName) }).apply {
             textSize = 11f
             setPadding(dp(8), dp(6), dp(8), dp(6))
@@ -555,6 +573,17 @@ class MainActivity : Activity() {
             onClick = {
                 dialog.dismiss()
                 showNormalChatFontSizeDialog()
+            }
+        ))
+
+        root.addView(materialActionCard(
+            context = context,
+            title = "通常チャット更新間隔",
+            summary = "現在: ${normalChatIntervalMs}ms",
+            actionLabel = "変更",
+            onClick = {
+                dialog.dismiss()
+                showNormalChatIntervalDialog()
             }
         ))
 
@@ -850,6 +879,70 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    private fun showNormalChatIntervalDialog() {
+        val options = arrayOf("即時 0ms", "高速 50ms", "標準 100ms", "ゆっくり 150ms", "かなりゆっくり 250ms", "確認用 500ms")
+        val values = NORMAL_CHAT_INTERVALS_MS
+        val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
+        val context = dialog.context
+        val controlTint = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(Color.parseColor("#FF0033"), Color.parseColor("#9A949D")),
+        )
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(10), dp(20), dp(24))
+        }
+        root.addView(View(context).apply {
+            background = roundedDrawable(Color.parseColor("#5E5E5E"), 2)
+        }, LinearLayout.LayoutParams(dp(44), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(18)
+        })
+        root.addView(TextView(context).apply {
+            text = "通常チャット更新間隔"
+            textSize = 22f
+            setTextColor(Color.parseColor("#F5F5F5"))
+            includeFontPadding = false
+        })
+        root.addView(TextView(context).apply {
+            text = "返ってきたチャットを何msごとに表示するかを変更します。"
+            textSize = 12f
+            setTextColor(Color.parseColor("#A8A8A8"))
+            setPadding(0, dp(6), 0, dp(12))
+        })
+        options.forEachIndexed { index, label ->
+            root.addView(MaterialRadioButton(context).apply {
+                text = label
+                textSize = 16f
+                setTextColor(Color.parseColor("#F5F5F5"))
+                buttonTintList = controlTint
+                isChecked = values[index] == normalChatIntervalMs
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    setNormalChatInterval(values[index])
+                    dialog.dismiss()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
+        }
+        root.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "キャンセル"
+            minHeight = dp(40)
+            minimumHeight = dp(40)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+            gravity = Gravity.END
+        })
+
+        dialog.setContentView(root)
+        dialog.setOnShowListener {
+            dialog.behavior.skipCollapsed = true
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
+    }
+
     private fun cycleNormalChatFontScale() {
         val currentIndex = NORMAL_CHAT_FONT_SCALES.indexOf(normalChatFontScale)
         val nextIndex = if (currentIndex >= 0) {
@@ -860,11 +953,28 @@ class MainActivity : Activity() {
         setNormalChatFontScale(NORMAL_CHAT_FONT_SCALES[nextIndex])
     }
 
+    private fun cycleNormalChatInterval() {
+        val currentIndex = NORMAL_CHAT_INTERVALS_MS.indexOf(normalChatIntervalMs)
+        val nextIndex = if (currentIndex >= 0) {
+            (currentIndex + 1) % NORMAL_CHAT_INTERVALS_MS.size
+        } else {
+            NORMAL_CHAT_INTERVALS_MS.indexOfFirst { it >= normalChatIntervalMs }.takeIf { it >= 0 } ?: 0
+        }
+        setNormalChatInterval(NORMAL_CHAT_INTERVALS_MS[nextIndex])
+    }
+
     private fun setNormalChatFontScale(scale: Int) {
         normalChatFontScale = scale.coerceIn(100, 300)
         prefs.edit().putInt(PREF_NORMAL_CHAT_FONT_SCALE, normalChatFontScale).apply()
         applyNormalChatSettings()
         status.text = "通常チャット文字サイズ: ${normalChatFontScale}%"
+    }
+
+    private fun setNormalChatInterval(intervalMs: Int) {
+        normalChatIntervalMs = intervalMs.coerceIn(0, 1000)
+        prefs.edit().putInt(PREF_NORMAL_CHAT_INTERVAL_MS, normalChatIntervalMs).apply()
+        applyNormalChatSettings()
+        status.text = "通常チャット更新間隔: ${normalChatIntervalMs}ms"
     }
 
     private fun setNormalChatShowName(show: Boolean) {
@@ -890,6 +1000,9 @@ class MainActivity : Activity() {
     private fun updateNormalChatControls() {
         if (::btnNormalChatFont.isInitialized) {
             btnNormalChatFont.text = "字${normalChatFontScale}"
+        }
+        if (::btnNormalChatInterval.isInitialized) {
+            btnNormalChatInterval.text = "間${normalChatIntervalMs}"
         }
         if (::btnNormalChatName.isInitialized) {
             btnNormalChatName.text = if (normalChatShowName) "名ON" else "名OFF"
@@ -2373,11 +2486,13 @@ class MainActivity : Activity() {
               const root = document.documentElement;
               try { root.setAttribute('data-ytlcf-app-normal-chat-enabled', '$value'); } catch (_) {}
               try { root.setAttribute('data-ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
+              try { root.setAttribute('data-ytlcf-app-normal-chat-interval-ms', '$normalChatIntervalMs'); } catch (_) {}
               try { root.setAttribute('data-ytlcf-app-normal-chat-show-name', '$showNameValue'); } catch (_) {}
               try { root.setAttribute('data-ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
               try { localStorage.removeItem('ytlcf-app-normal-chat-enabled'); } catch (_) {}
               try { localStorage.removeItem('ytcc-app-chat-only-enabled'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
+              try { localStorage.setItem('ytlcf-app-normal-chat-interval-ms', '$normalChatIntervalMs'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-show-name', '$showNameValue'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
               if ('$value' !== '1') {
@@ -2447,6 +2562,7 @@ class MainActivity : Activity() {
             .appendQueryParameter("ytcc_app_lcf", if (liveChatFlusherEnabled) "1" else "0")
             .appendQueryParameter("ytcc_app_chat_only", if (chatOnlyModeEnabled) "1" else "0")
             .appendQueryParameter("ytcc_app_normal_chat_font_scale", normalChatFontScale.toString())
+            .appendQueryParameter("ytcc_app_normal_chat_interval_ms", normalChatIntervalMs.toString())
             .appendQueryParameter("ytcc_app_normal_chat_show_name", if (normalChatShowName) "1" else "0")
             .appendQueryParameter("ytcc_app_normal_chat_show_photo", if (normalChatShowIcon) "1" else "0")
             .build()
@@ -2455,6 +2571,7 @@ class MainActivity : Activity() {
         val fragmentParams = mutableListOf(
             "ytcc_app_chat_only=1",
             "ytcc_app_normal_chat_font_scale=$normalChatFontScale",
+            "ytcc_app_normal_chat_interval_ms=$normalChatIntervalMs",
             "ytcc_app_normal_chat_show_name=${if (normalChatShowName) "1" else "0"}",
             "ytcc_app_normal_chat_show_photo=${if (normalChatShowIcon) "1" else "0"}",
         )
@@ -2655,10 +2772,13 @@ class MainActivity : Activity() {
         private const val PREF_CHAT_ONLY_MODE = "chat_only_mode"
         private const val PREF_PAUSE_ON_PIP_CLOSE = "pause_on_pip_close"
         private const val PREF_NORMAL_CHAT_FONT_SCALE = "normal_chat_font_scale"
+        private const val PREF_NORMAL_CHAT_INTERVAL_MS = "normal_chat_interval_ms"
         private const val PREF_NORMAL_CHAT_SHOW_NAME = "normal_chat_show_name"
         private const val PREF_NORMAL_CHAT_SHOW_ICON = "normal_chat_show_icon"
         private const val DEFAULT_NORMAL_CHAT_FONT_SCALE = 180
+        private const val DEFAULT_NORMAL_CHAT_INTERVAL_MS = 100
         private val NORMAL_CHAT_FONT_SCALES = intArrayOf(100, 140, 180, 220, 260, 300)
+        private val NORMAL_CHAT_INTERVALS_MS = intArrayOf(0, 50, 100, 150, 250, 500)
         private const val CHAT_ONLY_FORCED_FPS = 15
         private const val PREF_LAST_VIDEO_URL = "last_video_url"
         private const val PREF_LAST_VIDEO_TIME = "last_video_time"
