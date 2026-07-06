@@ -379,6 +379,12 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         chatOnlyBar.addView(
+            toolbarIconButton("再生/停止", R.drawable.ic_play_pause) { triggerYouTubePlayPauseShortcut() },
+            LinearLayout.LayoutParams(dp(56), dp(44)).apply {
+                marginEnd = dp(8)
+            },
+        )
+        chatOnlyBar.addView(
             toolbarButton("チャット専用を終了", onClick = { setChatOnlyMode(false) }).apply {
                 textSize = 14f
                 setPadding(dp(18), dp(8), dp(18), dp(8))
@@ -1515,6 +1521,32 @@ class MainActivity : Activity() {
             """.trimIndent()
             activeSession().loadUri("javascript:${Uri.encode(script)}")
         }, 50)
+    }
+
+    private fun triggerYouTubePlayPauseShortcut() {
+        if (!isYouTubeUrl(currentUrl())) return
+        geckoView.requestFocus()
+        val script = """
+            (() => {
+              const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+              const target = player || document.body || document.documentElement;
+              if (!target) return;
+              if (target.focus) target.focus();
+              for (const type of ['keydown', 'keyup']) {
+                const ev = new KeyboardEvent(type, {
+                  key: 'k',
+                  code: 'KeyK',
+                  keyCode: 75,
+                  which: 75,
+                  bubbles: true,
+                  cancelable: true
+                });
+                try { target.dispatchEvent(ev); } catch (_) {}
+              }
+            })()
+        """.trimIndent()
+        activeSession().loadUri("javascript:${Uri.encode(script)}")
+        status.text = "再生/停止"
     }
 
     private fun simulateNativeTouchAt(x: Float, y: Float) {
