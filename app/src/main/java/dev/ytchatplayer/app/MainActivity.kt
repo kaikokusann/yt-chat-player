@@ -23,7 +23,6 @@ import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import android.util.Log
@@ -85,7 +84,6 @@ class MainActivity : Activity() {
     private var youtubeChatCleanerEnabled = true
     private var liveChatFlusherEnabled = true
     private var pausePlaybackOnPipClose = true
-    private var wasRecentlyInPictureInPicture = false
     private var suppressFailedPageStopUntil = 0L
     private var currentOsFps = 0
 
@@ -109,9 +107,15 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_PIP_TOGGLE_PLAYBACK) {
-            handlePipPlaybackAction()
-            return
+        when (intent.action) {
+            ACTION_PIP_TOGGLE_PLAYBACK -> {
+                handlePipPlaybackAction()
+                return
+            }
+            ACTION_PIP_CLOSE -> {
+                handlePipCloseAction()
+                return
+            }
         }
         loadInitialUrl(intent)
     }
@@ -143,13 +147,6 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-    }
-
-    override fun onStop() {
-        if (pausePlaybackOnPipClose && wasRecentlyInPictureInPicture && ::videoSession.isInitialized) {
-            mediaSession?.controller?.transportControls?.stop()
-        }
-        super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -194,14 +191,7 @@ class MainActivity : Activity() {
         newConfig: Configuration
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        val wasInPictureInPicture = inPictureInPicture
         inPictureInPicture = isInPictureInPictureMode
-        wasRecentlyInPictureInPicture = isInPictureInPictureMode || wasInPictureInPicture
-        if (!isInPictureInPictureMode) {
-            geckoView.postDelayed({
-                if (!inPictureInPicture && !isFinishing) wasRecentlyInPictureInPicture = false
-            }, 1200)
-        }
         setPageAppPictureInPictureFlag(isInPictureInPictureMode)
         if (isInPictureInPictureMode) showOrUpdateMediaNotification()
         updateChromeForPictureInPicture()
@@ -209,17 +199,15 @@ class MainActivity : Activity() {
 
     private fun createMediaNotificationSupport() {
         notificationManager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                MEDIA_CHANNEL_ID,
-                "メディア再生",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "YouTube再生中の操作"
-                setShowBadge(false)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            MEDIA_CHANNEL_ID,
+            "メディア再生",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "YouTube再生中の操作"
+            setShowBadge(false)
         }
+        notificationManager.createNotificationChannel(channel)
         mediaSession = MediaSession(this, "YTChat").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() {
@@ -231,7 +219,7 @@ class MainActivity : Activity() {
                 }
 
                 override fun onStop() {
-                    stopVideoPlayback()
+                    setVideoPlaybackPaused(true)
                 }
             })
             isActive = true
@@ -240,7 +228,6 @@ class MainActivity : Activity() {
     }
 
     private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_POST_NOTIFICATIONS)
     }
@@ -449,12 +436,12 @@ class MainActivity : Activity() {
         ))
 
         root.addView(createSwitchOnlyRow(
-            title = "PiPを×で閉じたら再生を停止",
+            title = "PiPを×で閉じたら一時停止",
             isChecked = pausePlaybackOnPipClose,
             onCheckedChange = { checked ->
                 pausePlaybackOnPipClose = checked
                 prefs.edit().putBoolean(PREF_PAUSE_ON_PIP_CLOSE, checked).apply()
-                status.text = "PiP終了時の再生停止: ${if (checked) "ON" else "OFF"}"
+                status.text = "PiP終了時の一時停止: ${if (checked) "ON" else "OFF"}"
             },
         ))
 
@@ -1239,11 +1226,6 @@ class MainActivity : Activity() {
         videoSession.loadUri("javascript:${Uri.encode(script)}")
     }
 
-    private fun stopVideoPlayback() {
-        pauseVideoPlayback()
-        hideMediaNotification()
-    }
-
     private fun setAppFullScreen(enabled: Boolean) {
         if (fullScreen == enabled) return
         fullScreen = enabled
@@ -1299,9 +1281,25 @@ class MainActivity : Activity() {
             label,
             togglePendingIntent,
         )
+        val closeIntent = Intent(this, PipActionReceiver::class.java).apply {
+            action = ACTION_PIP_CLOSE
+        }
+        val closePendingIntent = PendingIntent.getBroadcast(
+            this,
+            3,
+            closeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val closeAction = RemoteAction(
+            Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
+            "閉じる",
+            "閉じる",
+            closePendingIntent,
+        )
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
             .setActions(listOf(toggleAction))
+            .setCloseAction(closeAction)
             .build()
     }
 
@@ -1391,8 +1389,7 @@ class MainActivity : Activity() {
     }
 
     private fun canPostNotifications(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        return checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun mediaNotificationTitle(): String {
@@ -1460,6 +1457,12 @@ class MainActivity : Activity() {
 
     internal fun handlePipPlaybackAction() {
         setVideoPlaybackPaused(!pipPlaybackPaused)
+    }
+
+    internal fun handlePipCloseAction() {
+        if (pausePlaybackOnPipClose) {
+            setVideoPlaybackPaused(true)
+        }
     }
 
     private fun setVideoPlaybackPaused(paused: Boolean) {
@@ -1688,13 +1691,17 @@ class MainActivity : Activity() {
         private const val MEDIA_NOTIFICATION_ID = 1001
         private const val REQUEST_POST_NOTIFICATIONS = 2001
         const val ACTION_PIP_TOGGLE_PLAYBACK = "dev.ytchatplayer.app.PIP_TOGGLE_PLAYBACK"
+        const val ACTION_PIP_CLOSE = "dev.ytchatplayer.app.PIP_CLOSE"
         private var currentActivity: MainActivity? = null
         private val YOUTUBE_HOSTS = setOf("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
 
         fun handlePipAction(intent: Intent?) {
-            if (intent?.action != ACTION_PIP_TOGGLE_PLAYBACK) return
+            val action = intent?.action ?: return
             currentActivity?.runOnUiThread {
-                currentActivity?.handlePipPlaybackAction()
+                when (action) {
+                    ACTION_PIP_TOGGLE_PLAYBACK -> currentActivity?.handlePipPlaybackAction()
+                    ACTION_PIP_CLOSE -> currentActivity?.handlePipCloseAction()
+                }
             }
         }
     }
