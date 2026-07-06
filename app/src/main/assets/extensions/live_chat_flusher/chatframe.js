@@ -11,6 +11,11 @@ Promise.all([
 	const mode = store.others[modeName] ?? 1;
 	logger.info('Loaded chat frame script:', `${modeName} =`, mode);
 	document.addEventListener('yt-action', onAction, { passive: true });
+	if (isNormalChatPageMode()) {
+		import(browser.runtime.getURL('./modules/normal_chat_page.mjs'))
+			.then(module => module.initializeNormalChatPage())
+			.catch(error => logger.warn('Failed to start normal chat page mode:', error));
+	}
 	if (mode) return;
 	const ev = new CustomEvent('ytlcf-start');
 	const timer = setInterval(() => {
@@ -46,5 +51,14 @@ function getPopupDocument() {
 		return win && !win.closed ? win.document : null;
 	} catch (_err) {
 		return null;
+	}
+}
+
+function isNormalChatPageMode() {
+	try {
+		return localStorage.getItem('ytcc-app-chat-only-enabled') === '1'
+			|| new URL(location.href).searchParams.get('ytcc_app_chat_only') === '1';
+	} catch (_error) {
+		return false;
 	}
 }

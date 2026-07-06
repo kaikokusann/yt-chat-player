@@ -90,11 +90,14 @@ export class ReplayActionBuffer {
  * Generates the replay chat actions from the response of InnerTube API.
  * @param {AbortSignal} signal signal for aborting fetching
  * @param {string} initialContinuation initial continuation token
+ * @param {object} [options]
+ * @param {boolean} [options.auth]
  * @returns {AsyncGenerator<LiveChat.ReplayChatItemAction[]>} chat actions generator
  */
-export async function* getReplayChatActionsAsyncIterable(signal, initialContinuation) {
+export async function* getReplayChatActionsAsyncIterable(signal, initialContinuation, options = {}) {
 	const url = new URL('/youtubei/v1/live_chat/get_live_chat_replay', location.origin);
 	url.searchParams.set('prettyPrint', 'false');
+	const auth = options.auth ?? true;
 
 	/** @type {Map<string, string>} */
 	const continuations = new Map();
@@ -121,7 +124,7 @@ export async function* getReplayChatActionsAsyncIterable(signal, initialContinua
 			prev = continuations.get(prev) || '';
 			body = { continuation: prev };
 		}
-		contents = await getContentsAsync(url, body);
+		contents = await getContentsAsync(url, body, { auth });
 		let sleepMs = 250;
 		if (contents.actions) yield contents.actions;
 		if (seekInfo) {
@@ -158,18 +161,21 @@ export async function* getReplayChatActionsAsyncIterable(signal, initialContinua
  * Generates the live chat actions from the response of InnerTube API.
  * @param {AbortSignal} signal signal for aborting fetching
  * @param {string} initialContinuation initial continuation token
+ * @param {object} [options]
+ * @param {boolean} [options.auth]
  * @returns {AsyncGenerator<LiveChat.LiveChatItemAction[]>} empty generator
  */
-export async function* getLiveChatActionsAsyncIterable(signal, initialContinuation) {
+export async function* getLiveChatActionsAsyncIterable(signal, initialContinuation, options = {}) {
 	const url = new URL('/youtubei/v1/live_chat/get_live_chat', location.origin);
 	url.searchParams.set('prettyPrint', 'false');
+	const auth = options.auth ?? true;
 
 	/** @type {ContinuationTokenContainer} */
 	let body = { continuation: initialContinuation };
 	/** @type { { actions: LiveChat.LiveChatItemAction[] } } */
 	let contents = { actions: [] };
 	while (!signal.aborted && body.continuation) {
-		contents = await getContentsAsync(url, body);
+		contents = await getContentsAsync(url, body, { auth });
 		yield contents.actions || [];
 		body = getContinuation(contents, false);
 		await sleep(250);
@@ -180,11 +186,13 @@ export async function* getLiveChatActionsAsyncIterable(signal, initialContinuati
  * Fetches the livechat contents object from the given URL and continuation token.
  * @param {URL} url URL
  * @param {ContinuationTokenContainer} body continuation token container
+ * @param {object} [options]
+ * @param {boolean} [options.auth]
  * @returns {Promise<any>} livechat contents object
  */
-async function getContentsAsync(url, body) {
+async function getContentsAsync(url, body, options = {}) {
 	try {
-		const json = await fetchInnerTube(url, body, { auth: true });
+		const json = await fetchInnerTube(url, body, { auth: options.auth ?? true });
 		return json.continuationContents?.liveChatContinuation;
 	} catch (cause) {
 		logger.error('Failed to fetch continuation contents.\nCaused by:', cause);

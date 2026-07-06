@@ -104,7 +104,7 @@ class MainActivity : Activity() {
     private var pausePlaybackOnPipClose = true
     private var suppressFailedPageStopUntil = 0L
     private var currentOsFps = 0
-    private var normalChatFontScale = 100
+    private var normalChatFontScale = DEFAULT_NORMAL_CHAT_FONT_SCALE
     private var normalChatShowIcon = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,7 +119,7 @@ class MainActivity : Activity() {
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
         pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
         currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
-        normalChatFontScale = prefs.getInt(PREF_NORMAL_CHAT_FONT_SCALE, 100)
+        normalChatFontScale = prefs.getInt(PREF_NORMAL_CHAT_FONT_SCALE, DEFAULT_NORMAL_CHAT_FONT_SCALE)
         normalChatShowIcon = prefs.getBoolean(PREF_NORMAL_CHAT_SHOW_ICON, true)
         applyEffectiveOsFps(showToast = false)
         setContentView(createUi())
@@ -352,6 +352,7 @@ class MainActivity : Activity() {
         root.addView(topBar, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
 
         geckoView = GeckoView(this)
+        geckoView.setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
         root.addView(
             geckoView,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f),
@@ -745,8 +746,8 @@ class MainActivity : Activity() {
     }
 
     private fun showNormalChatFontSizeDialog() {
-        val options = arrayOf("小さめ 90%", "標準 100%", "大きめ 115%", "かなり大きめ 130%", "特大 150%")
-        val values = intArrayOf(90, 100, 115, 130, 150)
+        val options = arrayOf("小さめ 100%", "標準 140%", "大きめ 180%", "かなり大きめ 220%", "特大 260%", "最大 300%")
+        val values = intArrayOf(100, 140, 180, 220, 260, 300)
         val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
         val context = dialog.context
         val controlTint = ColorStateList(
@@ -830,13 +831,6 @@ class MainActivity : Activity() {
             currentOsFps
         }
         applyOsFps(fps, showToast = showToast && !forcedForChatOnly)
-        if (showToast && forcedForChatOnly) {
-            Toast.makeText(
-                this,
-                "通常チャット専用モード中は ${CHAT_ONLY_FORCED_FPS}fps に固定します",
-                Toast.LENGTH_SHORT,
-            ).show()
-        }
     }
 
     private fun toolbarButton(label: String, onClick: () -> Unit, onLongClick: (() -> Boolean)? = null): Button =
@@ -1495,6 +1489,7 @@ class MainActivity : Activity() {
     private fun switchToSurface(surface: BrowserSurface) {
         if (activeSurface == surface) return
 
+        val previousSurface = activeSurface
         if (surface == BrowserSurface.MOBILE && chatOnlyModeEnabled) {
             setChatOnlyMode(false)
         }
@@ -1516,6 +1511,9 @@ class MainActivity : Activity() {
         activeSurface = surface
         applyEffectiveOsFps(showToast = false) // 表示画面が変わったのでFPS制限を再評価・適用
         geckoView.setSession(activeSession())
+        if (surface == BrowserSurface.CHAT || previousSurface == BrowserSurface.CHAT) {
+            geckoView.requestNewSurface()
+        }
         runtime.webExtensionController.setTabActive(activeSession(), true)
         address.setText(currentUrl())
         status.text = when (surface) {
@@ -1993,10 +1991,11 @@ class MainActivity : Activity() {
 
         if (enabled) {
             chatOnlyModeEnabled = true
-            chatOnlyWatchModeActive = true
+            chatOnlyWatchModeActive = false
             prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
-            status.text = "通常チャット専用モード: ON"
-            applyNormalChatModeToPage(true)
+            status.text = "通常チャットURLを取得中"
+            applyNormalChatModeToPage(false)
+            requestChatOnlyUrlFromVideoPage()
             applyEffectiveOsFps(showToast = false)
             updateChromeForPictureInPicture()
             return
@@ -2009,6 +2008,7 @@ class MainActivity : Activity() {
         applyNormalChatModeToPage(false)
         if (activeSurface == BrowserSurface.CHAT) {
             switchToSurface(BrowserSurface.VIDEO)
+            loadUrlInto(BrowserSurface.VIDEO, videoUrl, replaceHistory = true)
         }
         stopChatOnlySession()
         applyEffectiveOsFps(showToast = false)
@@ -2193,12 +2193,20 @@ class MainActivity : Activity() {
         val kind = playbackKind ?: chatPlaybackKindForUrl(normalized)
         Log.i(TAG, "Opening chat-only URL: kind=$kind url=$normalized")
         chatOnlyModeEnabled = true
-        chatOnlyWatchModeActive = true
+        chatOnlyWatchModeActive = false
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
-        applyNormalChatModeToPage(true)
+        applyNormalChatModeToPage(false)
+        pauseVideoPlayback()
+        resetChatSessionForChatOnly()
+        switchToSurface(BrowserSurface.CHAT)
+        applyBrowserMode(BrowserSurface.CHAT, BrowserMode.DESKTOP)
+        loadUrlInto(BrowserSurface.CHAT, normalized)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (activeSurface == BrowserSurface.CHAT) geckoView.requestNewSurface()
+        }, 500)
         applyEffectiveOsFps(showToast = false)
         updateChromeForPictureInPicture()
-        status.text = "通常チャット専用モード: ON"
+        status.text = "通常チャット専用モード: ON ($kind)"
     }
 
     private fun resetChatSessionForChatOnly() {
@@ -2249,10 +2257,15 @@ class MainActivity : Activity() {
         val showIconValue = if (normalChatShowIcon) "1" else "0"
         val script = """
             (() => {
+              const root = document.documentElement;
+              try { root.setAttribute('data-ytlcf-app-normal-chat-enabled', '$value'); } catch (_) {}
+              try { root.setAttribute('data-ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
+              try { root.setAttribute('data-ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-enabled', '$value'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
               window.dispatchEvent(new Event('ytlcf-normal-chat-change'));
+              window.postMessage({ type: 'ytlcf-normal-chat-change' }, '*');
               window.dispatchEvent(new Event('resize'));
             })()
         """.trimIndent()
@@ -2465,6 +2478,7 @@ class MainActivity : Activity() {
         private const val PREF_PAUSE_ON_PIP_CLOSE = "pause_on_pip_close"
         private const val PREF_NORMAL_CHAT_FONT_SCALE = "normal_chat_font_scale"
         private const val PREF_NORMAL_CHAT_SHOW_ICON = "normal_chat_show_icon"
+        private const val DEFAULT_NORMAL_CHAT_FONT_SCALE = 180
         private const val CHAT_ONLY_FORCED_FPS = 15
         private const val PREF_LAST_VIDEO_URL = "last_video_url"
         private const val PREF_LAST_VIDEO_TIME = "last_video_time"

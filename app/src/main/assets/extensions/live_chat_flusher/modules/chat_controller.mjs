@@ -19,6 +19,10 @@ export const SimultaneousModeEnum = Object.freeze({
 const APP_NORMAL_CHAT_KEY = 'ytlcf-app-normal-chat-enabled';
 const APP_NORMAL_CHAT_FONT_SCALE_KEY = 'ytlcf-app-normal-chat-font-scale';
 const APP_NORMAL_CHAT_SHOW_PHOTO_KEY = 'ytlcf-app-normal-chat-show-photo';
+const APP_NORMAL_CHAT_ATTR = 'data-ytlcf-app-normal-chat-enabled';
+const APP_NORMAL_CHAT_FONT_SCALE_ATTR = 'data-ytlcf-app-normal-chat-font-scale';
+const APP_NORMAL_CHAT_SHOW_PHOTO_ATTR = 'data-ytlcf-app-normal-chat-show-photo';
+const APP_NORMAL_CHAT_ACTIVE_CLASS = 'ytlcf-app-normal-chat-active';
 const NORMAL_CHAT_PHOTO_PARTS = Object.freeze([
 	['normal', 'normal'],
 	['member', 'member'],
@@ -31,7 +35,7 @@ const NORMAL_CHAT_PHOTO_PARTS = Object.freeze([
 	['membership', 'membership'],
 ]);
 
-class NormalChatView {
+export class NormalChatView {
 	/** @type {HTMLDivElement} */
 	element;
 	/** @type {ShadowRoot} */
@@ -45,32 +49,29 @@ class NormalChatView {
 	constructor() {
 		this.element = document.createElement('div');
 		this.element.id = 'yt-lcf-normal-chat';
+		Object.assign(this.element.style, {
+			background: '#fff',
+			boxSizing: 'border-box',
+			color: '#0f0f0f',
+			display: 'none',
+			fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+			fontSize: 'var(--yt-lcf-normal-chat-font-size)',
+			inset: '0',
+			lineHeight: '1.45',
+			overflow: 'hidden',
+			padding: '14px 14px 18px',
+			position: 'fixed',
+			zIndex: '2147483646',
+		});
 		this.root = this.element.attachShadow({ mode: 'closed' });
 		const style = document.createElement('style');
 		style.textContent = `
-			:host {
-				--yt-lcf-normal-chat-font-size: 24px;
-				background: #fff;
-				box-sizing: border-box;
-				color: #0f0f0f;
-				display: none;
-				font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-				font-size: var(--yt-lcf-normal-chat-font-size);
-				inset: 0;
-				line-height: 1.45;
-				overflow: hidden;
-				padding: 14px 14px 18px;
-				position: fixed;
-				z-index: 2147483646;
-			}
-			:host(.enabled) {
-				display: block;
-			}
 			.list {
 				box-sizing: border-box;
 				display: flex;
 				flex-direction: column;
 				gap: 8px;
+				font-size: var(--yt-lcf-normal-chat-font-size);
 				height: 100%;
 				justify-content: flex-end;
 				overflow: hidden;
@@ -109,17 +110,28 @@ class NormalChatView {
 			}
 			.photo {
 				border-radius: 50%;
-				height: 1.4em;
+				height: 1.4em !important;
 				margin-right: .35em;
-				object-fit: cover;
+				max-height: 1.4em !important;
+				max-width: 1.4em !important;
+				object-fit: cover !important;
 				vertical-align: -.32em;
-				width: 1.4em;
+				width: 1.4em !important;
 			}
 			:host(.hide-photo) .photo {
 				display: none !important;
 			}
 			.normal-chat-photo-hidden .photo {
 				display: none !important;
+			}
+			.normal-chat-image-placeholder {
+				background: #f1f3f4;
+				border-radius: .35em;
+				color: #5f6368;
+				display: inline-block;
+				font-size: .8em;
+				padding: .05em .35em;
+				vertical-align: .05em;
 			}
 			.name {
 				color: #16802a;
@@ -130,13 +142,22 @@ class NormalChatView {
 				color: #111;
 				overflow: visible;
 			}
-			.body img,
-			.body svg,
-			.sticker {
-				height: 1.15em;
+			img:not(.photo),
+			svg {
+				height: auto !important;
+				max-height: 2.8em !important;
+				max-width: min(45vw, 12em) !important;
 				object-fit: contain;
 				vertical-align: -.18em;
-				width: 1.15em;
+				width: auto !important;
+			}
+			.emoji img,
+			.body svg,
+			.open_in_new svg {
+				height: 1.15em !important;
+				max-height: 1.15em !important;
+				max-width: 1.15em !important;
+				width: 1.15em !important;
 			}
 			.superchat,
 			.supersticker,
@@ -168,9 +189,9 @@ class NormalChatView {
 	}
 
 	syncFromStorage() {
-		this.setEnabled(readBooleanLocalStorage(APP_NORMAL_CHAT_KEY, false));
-		this.setFontScale(readNumberLocalStorage(APP_NORMAL_CHAT_FONT_SCALE_KEY, 100));
-		this.setShowPhoto(readBooleanLocalStorage(APP_NORMAL_CHAT_SHOW_PHOTO_KEY, true));
+		this.setEnabled(readBooleanAppFlag(APP_NORMAL_CHAT_ATTR, APP_NORMAL_CHAT_KEY, false));
+		this.setFontScale(readNumberAppFlag(APP_NORMAL_CHAT_FONT_SCALE_ATTR, APP_NORMAL_CHAT_FONT_SCALE_KEY, 180));
+		this.setShowPhoto(readBooleanAppFlag(APP_NORMAL_CHAT_SHOW_PHOTO_ATTR, APP_NORMAL_CHAT_SHOW_PHOTO_KEY, true));
 		this.refreshDisplaySettings();
 	}
 
@@ -180,6 +201,7 @@ class NormalChatView {
 	setEnabled(enabled) {
 		this.enabled = enabled;
 		this.element.classList.toggle('enabled', enabled);
+		this.element.style.display = enabled ? 'block' : 'none';
 		if (!enabled) this.clear();
 	}
 
@@ -187,7 +209,7 @@ class NormalChatView {
 	 * @param {number} scale
 	 */
 	setFontScale(scale) {
-		const normalized = Math.min(220, Math.max(70, Number.isFinite(scale) ? scale : 100));
+		const normalized = Math.min(300, Math.max(70, Number.isFinite(scale) ? scale : 180));
 		const px = Math.round(24 * normalized / 100);
 		this.element.style.setProperty('--yt-lcf-normal-chat-font-size', `${px}px`);
 	}
@@ -209,6 +231,7 @@ class NormalChatView {
 		existing?.remove();
 		const item = /** @type {HTMLElement} */ (source.cloneNode(true));
 		item.removeAttribute('style');
+		this.removeLargeImages(item);
 		this.applyDisplaySettings(item);
 		this.list.append(item);
 		this.trim();
@@ -256,6 +279,41 @@ class NormalChatView {
 		item.classList.toggle('normal-chat-photo-hidden', !this.showPhoto || !showByFlusher);
 	}
 
+	/**
+	 * @param {HTMLElement} item
+	 */
+	removeLargeImages(item) {
+		for (const node of item.querySelectorAll('picture, video, iframe, canvas, svg image, yt-img-shadow, yt-animated-image, ytd-thumbnail, ytd-moving-thumbnail-renderer')) {
+			const placeholder = document.createElement('span');
+			placeholder.className = 'normal-chat-image-placeholder';
+			placeholder.textContent = '[画像]';
+			node.replaceWith(placeholder);
+		}
+		for (const node of item.querySelectorAll('[style*="background-image"]')) {
+			if (node.closest('.header')) continue;
+			node.removeAttribute('style');
+		}
+		for (const image of item.querySelectorAll('img')) {
+			const isAuthorPhoto = image.classList.contains('photo') && image.closest('.header');
+			if (isAuthorPhoto) {
+				image.removeAttribute('style');
+				image.removeAttribute('width');
+				image.removeAttribute('height');
+				continue;
+			}
+			const emoji = image.closest('.emoji');
+			if (emoji) {
+				const label = image.alt || emoji.getAttribute('data-shortcut') || emoji.getAttribute('data-label') || '';
+				emoji.replaceWith(label || '□');
+				continue;
+			}
+			const placeholder = document.createElement('span');
+			placeholder.className = 'normal-chat-image-placeholder';
+			placeholder.textContent = '[画像]';
+			image.replaceWith(placeholder);
+		}
+	}
+
 	trim() {
 		while (this.list.childElementCount > this.limit) {
 			this.list.firstElementChild?.remove();
@@ -263,8 +321,10 @@ class NormalChatView {
 	}
 }
 
-function readBooleanLocalStorage(key, fallback) {
+function readBooleanAppFlag(attrName, key, fallback) {
 	try {
+		const attrValue = document.documentElement.getAttribute(attrName);
+		if (attrValue != null) return attrValue === '1';
 		const value = localStorage.getItem(key);
 		if (value == null) return fallback;
 		return value === '1';
@@ -273,8 +333,13 @@ function readBooleanLocalStorage(key, fallback) {
 	}
 }
 
-function readNumberLocalStorage(key, fallback) {
+function readNumberAppFlag(attrName, key, fallback) {
 	try {
+		const attrValue = document.documentElement.getAttribute(attrName);
+		if (attrValue != null) {
+			const attrNumber = Number.parseInt(attrValue, 10);
+			if (Number.isFinite(attrNumber)) return attrNumber;
+		}
 		const value = Number.parseInt(localStorage.getItem(key) || '', 10);
 		return Number.isFinite(value) ? value : fallback;
 	} catch (_error) {
@@ -285,6 +350,8 @@ function readNumberLocalStorage(key, fallback) {
 export class LiveChatController {
 	#skip = false;
 	#isLive = false;
+	#hiddenVideoStyles = new WeakMap();
+	#videoHideTimer = 0;
 
 	/** @type {?VideoSegmentationExecutor} */
 	segmenter = null;
@@ -334,9 +401,57 @@ export class LiveChatController {
 		this.panel = new LiveChatPanel(this);
 		this.contextmenu = new LiveChatContextMenu();
 		this.abortController = new AbortController();
+		this.#setupNormalChatPageStyle();
 		const syncNormalChat = () => this.applyNormalChatSettings();
 		window.addEventListener('storage', syncNormalChat, { passive: true });
 		window.addEventListener('ytlcf-normal-chat-change', syncNormalChat, { passive: true });
+		window.addEventListener('message', event => {
+			if (event.data?.type === 'ytlcf-normal-chat-change') syncNormalChat();
+		}, { passive: true });
+		this.normalChatObserver = new MutationObserver(syncNormalChat);
+		this.normalChatObserver.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: [
+				APP_NORMAL_CHAT_ATTR,
+				APP_NORMAL_CHAT_FONT_SCALE_ATTR,
+				APP_NORMAL_CHAT_SHOW_PHOTO_ATTR,
+			],
+		});
+	}
+
+	#setupNormalChatPageStyle() {
+		const id = 'yt-lcf-normal-chat-page-style';
+		if (document.getElementById(id)) return;
+		const style = document.createElement('style');
+		style.id = id;
+		style.textContent = `
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS},
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} body {
+				overflow: hidden !important;
+			}
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} ytd-miniplayer,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} [class*="miniplayer"],
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} [class*="MiniPlayer"],
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-miniplayer-ui,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-player-minimized,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} ytd-player,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #player,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #player-container,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #player-container-outer,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #movie_player,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .html5-video-player,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .html5-video-container,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .video-stream,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} video,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-contextmenu,
+			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-popup {
+				display: none !important;
+				opacity: 0 !important;
+				pointer-events: none !important;
+				visibility: hidden !important;
+			}
+		`;
+		(document.head || document.documentElement).append(style);
 	}
 
 	async start() {
@@ -358,7 +473,7 @@ export class LiveChatController {
 		document.getElementById(this.normalChat.element.id)?.remove();
 		if (s.others.disabled) this.layer.hide();
 		videoContainer.after(this.layer.element);
-		this.layer.element.after(this.normalChat.element);
+		(document.body || document.documentElement).append(this.normalChat.element);
 
 		const promises = [
 			// fetching your channel ID and set styles for you
@@ -776,10 +891,14 @@ export class LiveChatController {
 
 	applyNormalChatSettings() {
 		this.normalChat.syncFromStorage();
+		document.documentElement.classList.toggle(APP_NORMAL_CHAT_ACTIVE_CLASS, this.normalChat.enabled);
 		if (this.normalChat.enabled) {
+			this.#resetPageScrollForNormalChat();
+			this.#startHidingVideoSurfaces();
 			this.layer.hide();
 			this.layoutCache.clear();
 		} else {
+			this.#stopHidingVideoSurfaces();
 			if (!s.others.disabled) this.layer.show();
 			return;
 		}
@@ -805,6 +924,93 @@ export class LiveChatController {
 				// Fall back to the media element below.
 			}
 			try { video?.play(); } catch (_error) {}
+		}
+	}
+
+	#startHidingVideoSurfaces() {
+		this.#hideVideoSurfaces();
+		if (this.#videoHideTimer) return;
+		this.#videoHideTimer = window.setInterval(() => this.#hideVideoSurfaces(), 500);
+	}
+
+	#stopHidingVideoSurfaces() {
+		if (this.#videoHideTimer) {
+			clearInterval(this.#videoHideTimer);
+			this.#videoHideTimer = 0;
+		}
+		for (const element of this.#videoSurfaceElements()) {
+			const original = this.#hiddenVideoStyles.get(element);
+			if (original == null) continue;
+			element.style.cssText = original;
+			this.#hiddenVideoStyles.delete(element);
+			if (element instanceof HTMLVideoElement) {
+				element.removeAttribute('width');
+				element.removeAttribute('height');
+			}
+		}
+	}
+
+	#hideVideoSurfaces() {
+		for (const element of this.#videoSurfaceElements()) {
+			if (!this.#hiddenVideoStyles.has(element)) {
+				this.#hiddenVideoStyles.set(element, element.style.cssText);
+			}
+			element.style.setProperty('display', 'none', 'important');
+			element.style.setProperty('visibility', 'hidden', 'important');
+			element.style.setProperty('opacity', '0', 'important');
+			element.style.setProperty('pointer-events', 'none', 'important');
+			element.style.setProperty('position', 'fixed', 'important');
+			element.style.setProperty('left', '-10000px', 'important');
+			element.style.setProperty('top', '-10000px', 'important');
+			element.style.setProperty('width', '1px', 'important');
+			element.style.setProperty('height', '1px', 'important');
+			element.style.setProperty('transform', 'translate(-10000px, -10000px) scale(0.01)', 'important');
+			if (element instanceof HTMLVideoElement) {
+				element.setAttribute('width', '1');
+				element.setAttribute('height', '1');
+			}
+		}
+	}
+
+	#videoSurfaceElements() {
+		return document.querySelectorAll([
+			'video',
+			'.video-stream',
+			'.html5-video-player',
+			'.html5-video-container',
+			'#movie_player',
+			'#player',
+			'#player-container',
+			'#player-container-outer',
+			'ytd-player',
+			'ytd-miniplayer',
+			'[class*="miniplayer"]',
+			'[class*="MiniPlayer"]',
+		].join(','));
+	}
+
+	#resetPageScrollForNormalChat() {
+		try {
+			window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+		} catch (_error) {
+			try { window.scrollTo(0, 0); } catch (_error2) {}
+		}
+		for (const scroller of [
+			document.scrollingElement,
+			document.documentElement,
+			document.body,
+			document.querySelector('ytd-app'),
+			document.querySelector('#content'),
+			document.querySelector('#page-manager'),
+		]) {
+			try {
+				if (scroller && 'scrollTop' in scroller) scroller.scrollTop = 0;
+			} catch (_error) {}
+		}
+		for (const scroller of document.querySelectorAll('*')) {
+			try {
+				if (scroller.scrollTop > 0) scroller.scrollTop = 0;
+			} catch (_error) {}
 		}
 	}
 
@@ -988,6 +1194,9 @@ export class LiveChatController {
 
 	close() {
 		this.unlisten();
+		this.normalChatObserver?.disconnect();
+		this.#stopHidingVideoSurfaces();
+		document.documentElement.classList.remove(APP_NORMAL_CHAT_ACTIVE_CLASS);
 		this.layer.clear();
 		this.normalChat.clear();
 	}
