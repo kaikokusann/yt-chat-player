@@ -415,6 +415,12 @@ function readNumberAppFlag(attrName, key, fallback) {
 	}
 }
 
+function normalizeFontSize(value) {
+	const number = Number.parseInt(String(value), 10);
+	if (!Number.isFinite(number)) return null;
+	return Math.min(96, Math.max(12, number));
+}
+
 export class LiveChatController {
 	#skip = false;
 
@@ -570,6 +576,34 @@ export class LiveChatController {
 		this.#setupDynamicControls(form);
 		this.#applySettingsToControls(form);
 		this.#applyInitialStyles(form);
+	}
+
+	/**
+	 * Applies settings requested by the Android app through the same storage path as the panel controls.
+	 * @param {{ fontSizePx?: number, showPhoto?: boolean }} settings
+	 */
+	applyAppSettings(settings) {
+		const form = this.panel.form;
+		if (!form) return false;
+		const fontSizePx = normalizeFontSize(settings.fontSizePx);
+		if (fontSizePx != null) {
+			const input = /** @type {?HTMLInputElement} */ (form.querySelector('input.styles[name="font_size"]'));
+			if (input) {
+				input.value = fontSizePx.toString();
+				this.panel.updateStorage(input);
+				this.layer.resetFontSize();
+			}
+		}
+		if (typeof settings.showPhoto === 'boolean') {
+			for (const type of Object.keys(s.data.parts)) {
+				if (!('photo' in s.data.parts[type])) continue;
+				const input = /** @type {?HTMLInputElement} */ (form.querySelector(`input[name="${type}_display"][value="photo"]`));
+				if (!input) continue;
+				input.checked = settings.showPhoto;
+				this.panel.updateStorage(input);
+			}
+		}
+		return true;
 	}
 
 	/**

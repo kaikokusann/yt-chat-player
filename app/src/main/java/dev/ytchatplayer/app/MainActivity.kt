@@ -108,6 +108,8 @@ class MainActivity : Activity() {
     private var pausePlaybackOnPipClose = true
     private var suppressFailedPageStopUntil = 0L
     private var currentOsFps = 0
+    private var lcfDanmakuFontSizePx = DEFAULT_LCF_DANMAKU_FONT_SIZE_PX
+    private var lcfDanmakuShowIcon = false
     private var normalChatFontScale = DEFAULT_NORMAL_CHAT_FONT_SCALE
     private var normalChatIntervalMs = DEFAULT_NORMAL_CHAT_INTERVAL_MS
     private var normalChatShowName = true
@@ -125,6 +127,10 @@ class MainActivity : Activity() {
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
         pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
         currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
+        lcfDanmakuFontSizePx = normalizeLcfDanmakuFontSize(
+            prefs.getInt(PREF_LCF_DANMAKU_FONT_SIZE_PX, DEFAULT_LCF_DANMAKU_FONT_SIZE_PX)
+        )
+        lcfDanmakuShowIcon = prefs.getBoolean(PREF_LCF_DANMAKU_SHOW_ICON, false)
         normalChatFontScale = prefs.getInt(PREF_NORMAL_CHAT_FONT_SCALE, DEFAULT_NORMAL_CHAT_FONT_SCALE)
         val savedNormalChatIntervalMs = prefs.getInt(PREF_NORMAL_CHAT_INTERVAL_MS, DEFAULT_NORMAL_CHAT_INTERVAL_MS)
         normalChatIntervalMs = normalizeNormalChatInterval(savedNormalChatIntervalMs)
@@ -559,6 +565,25 @@ class MainActivity : Activity() {
             }
         ))
 
+        root.addView(materialActionCard(
+            context = context,
+            title = "弾幕文字サイズ",
+            summary = "現在: ${lcfDanmakuFontSizePx}px",
+            actionLabel = "変更",
+            onClick = {
+                dialog.dismiss()
+                showLcfDanmakuFontSizeDialog()
+            }
+        ))
+
+        root.addView(materialSwitchCard(
+            context = context,
+            title = "弾幕アイコン",
+            summary = "弾幕にユーザーアイコンを表示",
+            isChecked = lcfDanmakuShowIcon,
+            onCheckedChange = { checked -> setLcfDanmakuShowIcon(checked) },
+        ))
+
         root.addView(materialSwitchCard(
             context = context,
             title = "通常チャット専用モード",
@@ -569,44 +594,6 @@ class MainActivity : Activity() {
                 setChatOnlyMode(checked)
                 if (checked) dialog.dismiss()
             },
-        ))
-
-        root.addView(materialActionCard(
-            context = context,
-            title = "通常チャット文字サイズ",
-            summary = "現在: ${normalChatFontScale}%",
-            actionLabel = "変更",
-            onClick = {
-                dialog.dismiss()
-                showNormalChatFontSizeDialog()
-            }
-        ))
-
-        root.addView(materialActionCard(
-            context = context,
-            title = "通常チャット更新間隔",
-            summary = "現在: ${normalChatIntervalMs}ms",
-            actionLabel = "変更",
-            onClick = {
-                dialog.dismiss()
-                showNormalChatIntervalDialog()
-            }
-        ))
-
-        root.addView(materialSwitchCard(
-            context = context,
-            title = "通常チャットのユーザー名",
-            summary = "チャット行のユーザー名を表示",
-            isChecked = normalChatShowName,
-            onCheckedChange = { checked -> setNormalChatShowName(checked) },
-        ))
-
-        root.addView(materialSwitchCard(
-            context = context,
-            title = "通常チャットのアイコン",
-            summary = "チャット行のユーザーアイコンを表示",
-            isChecked = normalChatShowIcon,
-            onCheckedChange = { checked -> setNormalChatShowIcon(checked) },
         ))
 
         root.addView(materialSwitchCard(
@@ -821,6 +808,82 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    private fun showLcfDanmakuFontSizeDialog() {
+        val values = LCF_DANMAKU_FONT_SIZES_PX
+        val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
+        val context = dialog.context
+        val controlTint = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(Color.parseColor("#FF0033"), Color.parseColor("#9A949D")),
+        )
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(10), dp(20), dp(24))
+        }
+        root.addView(View(context).apply {
+            background = roundedDrawable(Color.parseColor("#5E5E5E"), 2)
+        }, LinearLayout.LayoutParams(dp(44), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(18)
+        })
+        root.addView(TextView(context).apply {
+            text = "弾幕文字サイズ"
+            textSize = 22f
+            setTextColor(Color.parseColor("#F5F5F5"))
+            includeFontPadding = false
+        })
+        root.addView(TextView(context).apply {
+            text = "動画上に流れる弾幕チャットの文字サイズを変更します。"
+            textSize = 12f
+            setTextColor(Color.parseColor("#A8A8A8"))
+            setPadding(0, dp(6), 0, dp(12))
+        })
+        values.forEach { value ->
+            root.addView(MaterialRadioButton(context).apply {
+                text = if (value == DEFAULT_LCF_DANMAKU_FONT_SIZE_PX) "標準 ${value}px" else "${value}px"
+                textSize = 16f
+                setTextColor(Color.parseColor("#F5F5F5"))
+                buttonTintList = controlTint
+                isChecked = value == lcfDanmakuFontSizePx
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    setLcfDanmakuFontSize(value)
+                    dialog.dismiss()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
+        }
+        root.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "キャンセル"
+            minHeight = dp(40)
+            minimumHeight = dp(40)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+            gravity = Gravity.END
+        })
+
+        val scrollView = ScrollView(context).apply {
+            isFillViewport = true
+            clipToPadding = false
+            addView(root)
+        }
+        dialog.setContentView(scrollView)
+        dialog.setOnShowListener {
+            val availableHeight = resources.displayMetrics.heightPixels - statusBarHeight() - dp(24)
+            val targetHeight = minOf(availableHeight, (resources.displayMetrics.heightPixels * 0.78f).toInt())
+            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let { sheet ->
+                sheet.layoutParams = sheet.layoutParams.apply {
+                    height = targetHeight
+                }
+                sheet.requestLayout()
+            }
+            dialog.behavior.skipCollapsed = true
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
+    }
+
     private fun showNormalChatFontSizeDialog() {
         val options = arrayOf("小さめ 100%", "標準 140%", "大きめ 180%", "かなり大きめ 220%", "特大 260%", "最大 300%")
         val values = NORMAL_CHAT_FONT_SCALES
@@ -975,6 +1038,23 @@ class MainActivity : Activity() {
         applyNormalChatSettings()
         status.text = "通常チャット文字サイズ: ${normalChatFontScale}%"
     }
+
+    private fun setLcfDanmakuFontSize(sizePx: Int) {
+        lcfDanmakuFontSizePx = normalizeLcfDanmakuFontSize(sizePx)
+        prefs.edit().putInt(PREF_LCF_DANMAKU_FONT_SIZE_PX, lcfDanmakuFontSizePx).apply()
+        applyLiveChatFlusherAppSettings()
+        status.text = "弾幕文字サイズ: ${lcfDanmakuFontSizePx}px"
+    }
+
+    private fun setLcfDanmakuShowIcon(show: Boolean) {
+        lcfDanmakuShowIcon = show
+        prefs.edit().putBoolean(PREF_LCF_DANMAKU_SHOW_ICON, show).apply()
+        applyLiveChatFlusherAppSettings()
+        status.text = "弾幕アイコン: ${if (show) "ON" else "OFF"}"
+    }
+
+    private fun normalizeLcfDanmakuFontSize(sizePx: Int): Int =
+        sizePx.coerceIn(LCF_DANMAKU_FONT_SIZES_PX.first(), LCF_DANMAKU_FONT_SIZES_PX.last())
 
     private fun setNormalChatInterval(intervalMs: Int) {
         normalChatIntervalMs = normalizeNormalChatInterval(intervalMs)
@@ -1187,6 +1267,7 @@ class MainActivity : Activity() {
                         })();
                     """.trimIndent()
                     session.loadUri("javascript:${Uri.encode(script)}")
+                    applyLiveChatFlusherAppSettings()
                     applyNormalChatModeToPage(false)
                     applyNormalChatSettingsToChatSession()
                 }
@@ -2500,6 +2581,27 @@ class MainActivity : Activity() {
         chatSession.loadUri("javascript:${Uri.encode(normalChatSettingsScript(true))}")
     }
 
+    private fun applyLiveChatFlusherAppSettings() {
+        if (!::videoSession.isInitialized) return
+        val showPhotoValue = if (lcfDanmakuShowIcon) "true" else "false"
+        val showPhotoFlag = if (lcfDanmakuShowIcon) "1" else "0"
+        val script = """
+            (() => {
+              const root = document.documentElement;
+              const detail = {
+                fontSizePx: $lcfDanmakuFontSizePx,
+                showPhoto: $showPhotoValue
+              };
+              try { root.setAttribute('data-ytcc-app-lcf-font-size-px', '${lcfDanmakuFontSizePx}'); } catch (_) {}
+              try { root.setAttribute('data-ytcc-app-lcf-show-photo', '$showPhotoFlag'); } catch (_) {}
+              try { localStorage.setItem('ytcc-app-lcf-font-size-px', '${lcfDanmakuFontSizePx}'); } catch (_) {}
+              try { localStorage.setItem('ytcc-app-lcf-show-photo', '$showPhotoFlag'); } catch (_) {}
+              window.dispatchEvent(new CustomEvent('ytcc-app-lcf-settings', { detail }));
+            })()
+        """.trimIndent()
+        videoSession.loadUri("javascript:${Uri.encode(script)}")
+    }
+
     private fun normalChatSettingsScript(enabled: Boolean): String {
         val value = if (enabled) "1" else "0"
         val showNameValue = if (normalChatShowName) "1" else "0"
@@ -2794,10 +2896,14 @@ class MainActivity : Activity() {
         private const val PREF_LCF_ENABLED = "lcf_enabled"
         private const val PREF_CHAT_ONLY_MODE = "chat_only_mode"
         private const val PREF_PAUSE_ON_PIP_CLOSE = "pause_on_pip_close"
+        private const val PREF_LCF_DANMAKU_FONT_SIZE_PX = "lcf_danmaku_font_size_px"
+        private const val PREF_LCF_DANMAKU_SHOW_ICON = "lcf_danmaku_show_icon"
         private const val PREF_NORMAL_CHAT_FONT_SCALE = "normal_chat_font_scale"
         private const val PREF_NORMAL_CHAT_INTERVAL_MS = "normal_chat_interval_ms"
         private const val PREF_NORMAL_CHAT_SHOW_NAME = "normal_chat_show_name"
         private const val PREF_NORMAL_CHAT_SHOW_ICON = "normal_chat_show_icon"
+        private const val DEFAULT_LCF_DANMAKU_FONT_SIZE_PX = 32
+        private val LCF_DANMAKU_FONT_SIZES_PX = intArrayOf(12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40, 44, 48)
         private const val DEFAULT_NORMAL_CHAT_FONT_SCALE = 180
         private const val DEFAULT_NORMAL_CHAT_INTERVAL_MS = 100
         private val NORMAL_CHAT_FONT_SCALES = intArrayOf(100, 140, 180, 220, 260, 300)

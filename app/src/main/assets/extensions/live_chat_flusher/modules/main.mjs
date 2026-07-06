@@ -26,6 +26,11 @@ const FetchingModeEnum = Object.freeze({
 });
 /** @typedef {typeof FetchingModeEnum[keyof typeof FetchingModeEnum]} FetchingModeEnum */
 
+self.addEventListener('ytcc-app-lcf-settings', event => {
+	const detail = readAppSettingsDetail(event);
+	applyAppSettings(detail).catch(error => logger.warn('Failed to apply app settings:', error));
+}, { passive: true });
+
 /**
  * @typedef NavigateFinishEventDetail
  * @prop {string} pageType
@@ -210,4 +215,54 @@ function onTimeUpdate() {
 		const ev = new CustomEvent('ytlcf-action', { detail: pendingActions });
 		document.dispatchEvent(ev);
 	}
+}
+
+async function applyAppSettings(detail) {
+	if (state.controller?.applyAppSettings(detail)) return;
+	if (!store.isLoaded) await store.load();
+	const fontSizePx = normalizeFontSize(detail.fontSizePx);
+	if (fontSizePx != null) {
+		store.styles.font_size = `${fontSizePx}px`;
+	}
+	if (typeof detail.showPhoto === 'boolean') {
+		for (const type of Object.keys(store.data.parts)) {
+			if (!('photo' in store.data.parts[type])) continue;
+			store.data.parts[type].photo = detail.showPhoto;
+			store.parts[type] = store.data.parts[type];
+		}
+	}
+}
+
+function readAppSettingsDetail(event) {
+	let detail = {};
+	try {
+		detail = /** @type {CustomEvent} */ (event).detail || {};
+	} catch (_error) {
+	}
+	return {
+		fontSizePx: detail.fontSizePx ?? readAppSetting('data-ytcc-app-lcf-font-size-px', 'ytcc-app-lcf-font-size-px'),
+		showPhoto: typeof detail.showPhoto === 'boolean'
+			? detail.showPhoto
+			: readAppBooleanSetting('data-ytcc-app-lcf-show-photo', 'ytcc-app-lcf-show-photo'),
+	};
+}
+
+function readAppSetting(attrName, storageKey) {
+	try {
+		return document.documentElement.getAttribute(attrName) ?? localStorage.getItem(storageKey);
+	} catch (_error) {
+		return null;
+	}
+}
+
+function readAppBooleanSetting(attrName, storageKey) {
+	const value = readAppSetting(attrName, storageKey);
+	if (value == null) return undefined;
+	return value === '1' || value === 'true';
+}
+
+function normalizeFontSize(value) {
+	const number = Number.parseInt(String(value), 10);
+	if (!Number.isFinite(number)) return null;
+	return Math.min(96, Math.max(12, number));
 }
