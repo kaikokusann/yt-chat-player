@@ -8,6 +8,7 @@ let started = false;
 const NORMAL_CHAT_INTERVAL_KEY = 'ytlcf-app-normal-chat-interval-ms';
 const NORMAL_CHAT_INTERVAL_ATTR = 'data-ytlcf-app-normal-chat-interval-ms';
 const DEFAULT_NORMAL_CHAT_INTERVAL_MS = 100;
+const MIN_NORMAL_CHAT_INTERVAL_MS = 50;
 const MAX_QUEUE_GROUPS = 800;
 
 export async function initializeNormalChatPage() {
@@ -186,7 +187,7 @@ function readIntervalMs() {
 function normalizeIntervalMs(value) {
 	const number = Number.parseInt(String(value), 10);
 	if (!Number.isFinite(number)) return DEFAULT_NORMAL_CHAT_INTERVAL_MS;
-	return Math.min(1000, Math.max(0, number));
+	return Math.min(1000, Math.max(MIN_NORMAL_CHAT_INTERVAL_MS, number));
 }
 
 function sleep(ms) {

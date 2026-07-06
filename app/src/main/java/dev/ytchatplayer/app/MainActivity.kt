@@ -31,6 +31,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
@@ -125,7 +126,11 @@ class MainActivity : Activity() {
         pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
         currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
         normalChatFontScale = prefs.getInt(PREF_NORMAL_CHAT_FONT_SCALE, DEFAULT_NORMAL_CHAT_FONT_SCALE)
-        normalChatIntervalMs = prefs.getInt(PREF_NORMAL_CHAT_INTERVAL_MS, DEFAULT_NORMAL_CHAT_INTERVAL_MS)
+        val savedNormalChatIntervalMs = prefs.getInt(PREF_NORMAL_CHAT_INTERVAL_MS, DEFAULT_NORMAL_CHAT_INTERVAL_MS)
+        normalChatIntervalMs = normalizeNormalChatInterval(savedNormalChatIntervalMs)
+        if (normalChatIntervalMs != savedNormalChatIntervalMs) {
+            prefs.edit().putInt(PREF_NORMAL_CHAT_INTERVAL_MS, normalChatIntervalMs).apply()
+        }
         normalChatShowName = prefs.getBoolean(PREF_NORMAL_CHAT_SHOW_NAME, true)
         normalChatShowIcon = prefs.getBoolean(PREF_NORMAL_CHAT_SHOW_ICON, true)
         applyEffectiveOsFps(showToast = false)
@@ -182,6 +187,7 @@ class MainActivity : Activity() {
         // Force sync states upon resume to recover from suspended JavaScript state
         setPageAppFullScreenFlag(fullScreen)
         setPageAppPictureInPictureFlag(inPictureInPicture)
+        updateKeepScreenOn()
     }
 
     override fun onPause() {
@@ -880,7 +886,7 @@ class MainActivity : Activity() {
     }
 
     private fun showNormalChatIntervalDialog() {
-        val options = arrayOf("即時 0ms", "高速 50ms", "標準 100ms", "ゆっくり 150ms", "かなりゆっくり 250ms", "確認用 500ms")
+        val options = arrayOf("高速 50ms", "標準 100ms", "ゆっくり 150ms", "かなりゆっくり 250ms", "確認用 500ms")
         val values = NORMAL_CHAT_INTERVALS_MS
         val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
         val context = dialog.context
@@ -971,11 +977,14 @@ class MainActivity : Activity() {
     }
 
     private fun setNormalChatInterval(intervalMs: Int) {
-        normalChatIntervalMs = intervalMs.coerceIn(0, 1000)
+        normalChatIntervalMs = normalizeNormalChatInterval(intervalMs)
         prefs.edit().putInt(PREF_NORMAL_CHAT_INTERVAL_MS, normalChatIntervalMs).apply()
         applyNormalChatSettings()
         status.text = "通常チャット更新間隔: ${normalChatIntervalMs}ms"
     }
+
+    private fun normalizeNormalChatInterval(intervalMs: Int): Int =
+        intervalMs.coerceIn(MIN_NORMAL_CHAT_INTERVAL_MS, 1000)
 
     private fun setNormalChatShowName(show: Boolean) {
         normalChatShowName = show
@@ -2019,6 +2028,15 @@ class MainActivity : Activity() {
         if (::chatOnlyBar.isInitialized) {
             chatOnlyBar.visibility = if (!hideChrome && hideForChatOnly) View.VISIBLE else View.GONE
         }
+        updateKeepScreenOn()
+    }
+
+    private fun updateKeepScreenOn() {
+        if (chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private fun enterVideoFullScreen() {
@@ -2778,7 +2796,8 @@ class MainActivity : Activity() {
         private const val DEFAULT_NORMAL_CHAT_FONT_SCALE = 180
         private const val DEFAULT_NORMAL_CHAT_INTERVAL_MS = 100
         private val NORMAL_CHAT_FONT_SCALES = intArrayOf(100, 140, 180, 220, 260, 300)
-        private val NORMAL_CHAT_INTERVALS_MS = intArrayOf(0, 50, 100, 150, 250, 500)
+        private const val MIN_NORMAL_CHAT_INTERVAL_MS = 50
+        private val NORMAL_CHAT_INTERVALS_MS = intArrayOf(50, 100, 150, 250, 500)
         private const val CHAT_ONLY_FORCED_FPS = 15
         private const val PREF_LAST_VIDEO_URL = "last_video_url"
         private const val PREF_LAST_VIDEO_TIME = "last_video_time"
