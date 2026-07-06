@@ -101,7 +101,7 @@ class MainActivity : Activity() {
         chatOnlyModeEnabled = prefs.getBoolean(PREF_CHAT_ONLY_MODE, false)
         pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
         currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
-        applyOsFps(currentOsFps, showToast = false)
+        applyEffectiveOsFps(showToast = false)
         setContentView(createUi())
         createBrowser()
         installBuiltInExtensions()
@@ -549,7 +549,7 @@ class MainActivity : Activity() {
             .setSingleChoiceItems(options, selectedIndex) { dialog, which ->
                 currentOsFps = values[which]
                 prefs.edit().putInt(PREF_FPS_LIMIT, currentOsFps).apply()
-                applyOsFps(currentOsFps, showToast = true)
+                applyEffectiveOsFps(showToast = true)
                 dialog.dismiss()
             }
             .setNegativeButton("キャンセル", null)
@@ -564,6 +564,23 @@ class MainActivity : Activity() {
         window.attributes = params
         if (showToast && fps > 0) {
             Toast.makeText(this, "動画再生時のFPS制限を ${fps} に設定しました", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun applyEffectiveOsFps(showToast: Boolean = false) {
+        val forcedForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.VIDEO
+        val fps = if (forcedForChatOnly) {
+            CHAT_ONLY_FORCED_FPS
+        } else {
+            currentOsFps
+        }
+        applyOsFps(fps, showToast = showToast && !forcedForChatOnly)
+        if (showToast && forcedForChatOnly) {
+            Toast.makeText(
+                this,
+                "通常チャット専用モード中は ${CHAT_ONLY_FORCED_FPS}fps に固定します",
+                Toast.LENGTH_SHORT,
+            ).show()
         }
     }
 
@@ -1171,7 +1188,7 @@ class MainActivity : Activity() {
         
         if (fullScreen) setAppFullScreen(false)
         activeSurface = surface
-        applyOsFps(currentOsFps, showToast = false) // 表示画面が変わったのでFPS制限を再評価・適用
+        applyEffectiveOsFps(showToast = false) // 表示画面が変わったのでFPS制限を再評価・適用
         geckoView.setSession(activeSession())
         runtime.webExtensionController.setTabActive(activeSession(), true)
         address.setText(currentUrl())
@@ -1600,6 +1617,7 @@ class MainActivity : Activity() {
         chatOnlyModeEnabled = enabled
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, enabled).apply()
         status.text = "通常チャット専用モード: ${if (enabled) "ON" else "OFF"}"
+        applyEffectiveOsFps(showToast = false)
         updateChromeForPictureInPicture()
         applyChatOnlyModeToPage(enabled)
     }
@@ -1781,6 +1799,7 @@ class MainActivity : Activity() {
         private const val PREF_LCF_ENABLED = "lcf_enabled"
         private const val PREF_CHAT_ONLY_MODE = "chat_only_mode"
         private const val PREF_PAUSE_ON_PIP_CLOSE = "pause_on_pip_close"
+        private const val CHAT_ONLY_FORCED_FPS = 15
         private const val PREF_LAST_VIDEO_URL = "last_video_url"
         private const val PREF_LAST_VIDEO_TIME = "last_video_time"
         private const val MEDIA_CHANNEL_ID = "ytchat_media"
