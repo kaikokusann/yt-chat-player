@@ -472,7 +472,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(dp(46), dp(44)).apply { marginEnd = dp(8) },
         )
         chatOnlyBar.addView(
-            toolbarButton("チャット専用を終了", onClick = { setChatOnlyMode(false) }).apply {
+            toolbarButton("動画へ戻る", onClick = { setChatOnlyMode(false) }).apply {
                 textSize = 12f
                 setSingleLine(true)
                 ellipsize = TextUtils.TruncateAt.END
