@@ -450,7 +450,7 @@ class MainActivity : Activity() {
             .create()
 
         root.addView(createSettingRow(
-            title = "YouTube Chat Cleaner",
+            title = "YT Chat Cleaner",
             isChecked = youtubeChatCleanerEnabled,
             onCheckedChange = { checked -> setPageFlag(PREF_YCC_ENABLED, "YouTubeChatCleaner", checked) },
             onSettingsClick = {
