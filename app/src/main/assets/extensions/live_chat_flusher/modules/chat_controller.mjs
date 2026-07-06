@@ -16,7 +16,6 @@ export const SimultaneousModeEnum = Object.freeze({
 	LAST_MERGE: 3,
 });
 
-const APP_NORMAL_CHAT_KEY = 'ytlcf-app-normal-chat-enabled';
 const APP_NORMAL_CHAT_FONT_SCALE_KEY = 'ytlcf-app-normal-chat-font-scale';
 const APP_NORMAL_CHAT_SHOW_NAME_KEY = 'ytlcf-app-normal-chat-show-name';
 const APP_NORMAL_CHAT_SHOW_PHOTO_KEY = 'ytlcf-app-normal-chat-show-photo';
@@ -227,7 +226,7 @@ export class NormalChatView {
 	}
 
 	syncFromStorage() {
-		this.setEnabled(readBooleanAppFlag(APP_NORMAL_CHAT_ATTR, APP_NORMAL_CHAT_KEY, false));
+		this.setEnabled(document.documentElement.getAttribute(APP_NORMAL_CHAT_ATTR) === '1');
 		this.setFontScale(readNumberAppFlag(APP_NORMAL_CHAT_FONT_SCALE_ATTR, APP_NORMAL_CHAT_FONT_SCALE_KEY, 180));
 		this.setShowName(readBooleanAppFlag(APP_NORMAL_CHAT_SHOW_NAME_ATTR, APP_NORMAL_CHAT_SHOW_NAME_KEY, true));
 		this.setShowPhoto(readBooleanAppFlag(APP_NORMAL_CHAT_SHOW_PHOTO_ATTR, APP_NORMAL_CHAT_SHOW_PHOTO_KEY, true));
@@ -419,9 +418,6 @@ function readNumberAppFlag(attrName, key, fallback) {
 
 export class LiveChatController {
 	#skip = false;
-	#isLive = false;
-	#hiddenVideoStyles = new WeakMap();
-	#videoHideTimer = 0;
 
 	/** @type {?VideoSegmentationExecutor} */
 	segmenter = null;
@@ -471,7 +467,6 @@ export class LiveChatController {
 		this.panel = new LiveChatPanel(this);
 		this.contextmenu = new LiveChatContextMenu();
 		this.abortController = new AbortController();
-		this.#setupNormalChatPageStyle();
 		const syncNormalChat = () => this.applyNormalChatSettings();
 		window.addEventListener('storage', syncNormalChat, { passive: true });
 		window.addEventListener('ytlcf-normal-chat-change', syncNormalChat, { passive: true });
@@ -488,41 +483,6 @@ export class LiveChatController {
 				APP_NORMAL_CHAT_SHOW_PHOTO_ATTR,
 			],
 		});
-	}
-
-	#setupNormalChatPageStyle() {
-		const id = 'yt-lcf-normal-chat-page-style';
-		if (document.getElementById(id)) return;
-		const style = document.createElement('style');
-		style.id = id;
-		style.textContent = `
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS},
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} body {
-				overflow: hidden !important;
-			}
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} ytd-miniplayer,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} [class*="miniplayer"],
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} [class*="MiniPlayer"],
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-miniplayer-ui,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-player-minimized,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} ytd-player,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #player,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #player-container,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #player-container-outer,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} #movie_player,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .html5-video-player,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .html5-video-container,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .video-stream,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} video,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-contextmenu,
-			html.${APP_NORMAL_CHAT_ACTIVE_CLASS} .ytp-popup {
-				display: none !important;
-				opacity: 0 !important;
-				pointer-events: none !important;
-				visibility: hidden !important;
-			}
-		`;
-		(document.head || document.documentElement).append(style);
 	}
 
 	async start() {
@@ -952,136 +912,14 @@ export class LiveChatController {
 		le.after(canvas);
 	}
 
-	/**
-	 * @param {boolean} isLive
-	 */
-	setPlaybackKind(isLive) {
-		this.#isLive = isLive;
-		this.applyNormalChatSettings();
-	}
-
 	applyNormalChatSettings() {
 		this.normalChat.syncFromStorage();
 		document.documentElement.classList.toggle(APP_NORMAL_CHAT_ACTIVE_CLASS, this.normalChat.enabled);
 		if (this.normalChat.enabled) {
-			this.#resetPageScrollForNormalChat();
-			this.#startHidingVideoSurfaces();
 			this.layer.hide();
 			this.layoutCache.clear();
 		} else {
-			this.#stopHidingVideoSurfaces();
 			if (!s.others.disabled) this.layer.show();
-			return;
-		}
-		const video = /** @type {?HTMLVideoElement} */ (this.player.querySelector('#movie_player video') || document.querySelector('#movie_player video') || document.querySelector('video'));
-		const player = document.querySelector('#movie_player');
-		if (this.#isLive) {
-			try {
-				if (player && typeof player.pauseVideo === 'function') {
-					player.pauseVideo();
-					return;
-				}
-			} catch (_error) {
-				// Fall back to the media element below.
-			}
-			try { video?.pause(); } catch (_error) {}
-		} else {
-			try {
-				if (player && typeof player.playVideo === 'function') {
-					player.playVideo();
-					return;
-				}
-			} catch (_error) {
-				// Fall back to the media element below.
-			}
-			try { video?.play(); } catch (_error) {}
-		}
-	}
-
-	#startHidingVideoSurfaces() {
-		this.#hideVideoSurfaces();
-		if (this.#videoHideTimer) return;
-		this.#videoHideTimer = window.setInterval(() => this.#hideVideoSurfaces(), 500);
-	}
-
-	#stopHidingVideoSurfaces() {
-		if (this.#videoHideTimer) {
-			clearInterval(this.#videoHideTimer);
-			this.#videoHideTimer = 0;
-		}
-		for (const element of this.#videoSurfaceElements()) {
-			const original = this.#hiddenVideoStyles.get(element);
-			if (original == null) continue;
-			element.style.cssText = original;
-			this.#hiddenVideoStyles.delete(element);
-			if (element instanceof HTMLVideoElement) {
-				element.removeAttribute('width');
-				element.removeAttribute('height');
-			}
-		}
-	}
-
-	#hideVideoSurfaces() {
-		for (const element of this.#videoSurfaceElements()) {
-			if (!this.#hiddenVideoStyles.has(element)) {
-				this.#hiddenVideoStyles.set(element, element.style.cssText);
-			}
-			element.style.setProperty('display', 'none', 'important');
-			element.style.setProperty('visibility', 'hidden', 'important');
-			element.style.setProperty('opacity', '0', 'important');
-			element.style.setProperty('pointer-events', 'none', 'important');
-			element.style.setProperty('position', 'fixed', 'important');
-			element.style.setProperty('left', '-10000px', 'important');
-			element.style.setProperty('top', '-10000px', 'important');
-			element.style.setProperty('width', '1px', 'important');
-			element.style.setProperty('height', '1px', 'important');
-			element.style.setProperty('transform', 'translate(-10000px, -10000px) scale(0.01)', 'important');
-			if (element instanceof HTMLVideoElement) {
-				element.setAttribute('width', '1');
-				element.setAttribute('height', '1');
-			}
-		}
-	}
-
-	#videoSurfaceElements() {
-		return document.querySelectorAll([
-			'video',
-			'.video-stream',
-			'.html5-video-player',
-			'.html5-video-container',
-			'#movie_player',
-			'#player',
-			'#player-container',
-			'#player-container-outer',
-			'ytd-player',
-			'ytd-miniplayer',
-			'[class*="miniplayer"]',
-			'[class*="MiniPlayer"]',
-		].join(','));
-	}
-
-	#resetPageScrollForNormalChat() {
-		try {
-			window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-		} catch (_error) {
-			try { window.scrollTo(0, 0); } catch (_error2) {}
-		}
-		for (const scroller of [
-			document.scrollingElement,
-			document.documentElement,
-			document.body,
-			document.querySelector('ytd-app'),
-			document.querySelector('#content'),
-			document.querySelector('#page-manager'),
-		]) {
-			try {
-				if (scroller && 'scrollTop' in scroller) scroller.scrollTop = 0;
-			} catch (_error) {}
-		}
-		for (const scroller of document.querySelectorAll('*')) {
-			try {
-				if (scroller.scrollTop > 0) scroller.scrollTop = 0;
-			} catch (_error) {}
 		}
 	}
 
@@ -1266,7 +1104,6 @@ export class LiveChatController {
 	close() {
 		this.unlisten();
 		this.normalChatObserver?.disconnect();
-		this.#stopHidingVideoSurfaces();
 		document.documentElement.classList.remove(APP_NORMAL_CHAT_ACTIVE_CLASS);
 		this.layer.clear();
 		this.normalChat.clear();

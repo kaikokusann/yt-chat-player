@@ -88,8 +88,7 @@ function installSettingsSync(view) {
 
 function isEnabled() {
 	try {
-		return localStorage.getItem('ytcc-app-chat-only-enabled') === '1'
-			|| new URL(location.href).searchParams.get('ytcc_app_chat_only') === '1';
+		return new URL(location.href).searchParams.get('ytcc_app_chat_only') === '1';
 	} catch (_error) {
 		return false;
 	}

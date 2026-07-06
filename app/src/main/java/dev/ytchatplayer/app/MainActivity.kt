@@ -1108,10 +1108,9 @@ class MainActivity : Activity() {
                         setChatOnlyMode(false)
                     } else {
                         val url = params["url"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
-                        val kind = params["kind"]?.takeIf { it.isNotBlank() }
                         val offsetMs = params["offsetMs"]?.toLongOrNull()
                         if (url != null && isYouTubeChatUrl(url)) {
-                            openChatOnlySurface(url, kind, offsetMs)
+                            openChatOnlySurface(url, offsetMs)
                         } else {
                             status.text = "チャットURLが不正です"
                             Toast.makeText(this@MainActivity, "チャットURLが不正です", Toast.LENGTH_SHORT).show()
@@ -2260,10 +2259,8 @@ class MainActivity : Activity() {
               };
 
               const send = (url, source) => {
-                const kind = url.includes('/live_chat_replay') ? 'archive' : 'live';
                 alert(
                   'ytcc-open-chat:url=' + encodeURIComponent(url) +
-                  '&kind=' + encodeURIComponent(kind) +
                   '&offsetMs=' + encodeURIComponent(String(playbackOffsetMs())) +
                   '&source=' + encodeURIComponent(source)
                 );
@@ -2297,7 +2294,7 @@ class MainActivity : Activity() {
         videoSession.loadUri("javascript:${Uri.encode(script)}")
     }
 
-    private fun openChatOnlySurface(rawChatUrl: String, playbackKind: String?, playbackOffsetMs: Long? = null) {
+    private fun openChatOnlySurface(rawChatUrl: String, playbackOffsetMs: Long? = null) {
         val normalized = normalizeChatOnlyUrl(rawChatUrl, playbackOffsetMs)
         if (!isYouTubeChatUrl(normalized)) {
             status.text = "チャットURLが不正です"
@@ -2305,13 +2302,11 @@ class MainActivity : Activity() {
             return
         }
 
-        val kind = playbackKind ?: chatPlaybackKindForUrl(normalized)
-        Log.i(TAG, "Opening chat-only URL: kind=$kind url=$normalized")
+        Log.i(TAG, "Opening chat-only URL: $normalized")
         chatOnlyModeEnabled = true
         chatOnlyWatchModeActive = false
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
         applyNormalChatModeToPage(false)
-        if (kind == "live") pauseVideoPlayback()
         resetChatSessionForChatOnly()
         switchToSurface(BrowserSurface.CHAT)
         applyBrowserMode(BrowserSurface.CHAT, BrowserMode.DESKTOP)
@@ -2321,7 +2316,7 @@ class MainActivity : Activity() {
         }, 500)
         applyEffectiveOsFps(showToast = false)
         updateChromeForPictureInPicture()
-        status.text = "通常チャット専用モード: ON ($kind)"
+        status.text = "通常チャット専用モード: ON"
     }
 
     private fun resetChatSessionForChatOnly() {
@@ -2387,10 +2382,56 @@ class MainActivity : Activity() {
               try { root.setAttribute('data-ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
               try { root.setAttribute('data-ytlcf-app-normal-chat-show-name', '$showNameValue'); } catch (_) {}
               try { root.setAttribute('data-ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
-              try { localStorage.setItem('ytlcf-app-normal-chat-enabled', '$value'); } catch (_) {}
+              try { localStorage.removeItem('ytlcf-app-normal-chat-enabled'); } catch (_) {}
+              try { localStorage.removeItem('ytcc-app-chat-only-enabled'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-font-scale', '$normalChatFontScale'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-show-name', '$showNameValue'); } catch (_) {}
               try { localStorage.setItem('ytlcf-app-normal-chat-show-photo', '$showIconValue'); } catch (_) {}
+              if ('$value' !== '1') {
+                root.classList.remove('ytlcf-app-normal-chat-active');
+                const legacyTargets = document.querySelectorAll([
+                  'video',
+                  '.video-stream',
+                  '.html5-video-player',
+                  '.html5-video-container',
+                  '#movie_player',
+                  '#player',
+                  '#player-container',
+                  '#player-container-outer',
+                  'ytd-player',
+                  'ytd-miniplayer',
+                  '[class*="miniplayer"]',
+                  '[class*="MiniPlayer"]'
+                ].join(','));
+                for (const element of legacyTargets) {
+                  const style = element.style;
+                  const looksLegacyHidden =
+                    style.getPropertyValue('left') === '-10000px' ||
+                    style.getPropertyValue('top') === '-10000px' ||
+                    style.getPropertyValue('width') === '1px' ||
+                    style.getPropertyValue('height') === '1px' ||
+                    style.getPropertyValue('transform').includes('-10000px');
+                  if (!looksLegacyHidden) continue;
+                  for (const name of [
+                    'display',
+                    'visibility',
+                    'opacity',
+                    'pointer-events',
+                    'position',
+                    'left',
+                    'top',
+                    'width',
+                    'height',
+                    'transform'
+                  ]) {
+                    style.removeProperty(name);
+                  }
+                  if (element instanceof HTMLVideoElement) {
+                    element.removeAttribute('width');
+                    element.removeAttribute('height');
+                  }
+                }
+              }
               window.dispatchEvent(new Event('ytlcf-normal-chat-change'));
               window.postMessage({ type: 'ytlcf-normal-chat-change' }, '*');
               window.dispatchEvent(new Event('resize'));
@@ -2456,11 +2497,6 @@ class MainActivity : Activity() {
             ?.takeIf { it > 0 && path == "/live_chat_replay" }
             ?.let { builder.appendQueryParameter("ytcc_chat_offset_ms", it.toString()) }
         return builder.build().toString()
-    }
-
-    private fun chatPlaybackKindForUrl(rawUrl: String): String {
-        val path = runCatching { Uri.parse(rawUrl).path.orEmpty() }.getOrNull().orEmpty()
-        return if (path == "/live_chat_replay") "archive" else "live"
     }
 
     private fun browserModeFor(rawUrl: String): BrowserMode {
