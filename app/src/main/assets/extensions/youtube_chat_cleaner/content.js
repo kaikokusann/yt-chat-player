@@ -50,6 +50,8 @@ async function init() {
 
   // チャットパネルの表示/非表示を監視
   observeChatVisibility();
+  window.addEventListener('storage', () => applyConfig(config));
+  window.addEventListener('ytcc-chat-only-change', () => applyConfig(config));
 
 }
 

@@ -1461,6 +1461,7 @@ class MainActivity : Activity() {
         topBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         status.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         navBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
+        geckoView.setPadding(0, if (!hideChrome && hideForChatOnly) statusBarHeight() else 0, 0, 0)
         if (::chatOnlyBar.isInitialized) {
             chatOnlyBar.visibility = if (!hideChrome && hideForChatOnly) View.VISIBLE else View.GONE
         }
@@ -1600,7 +1601,23 @@ class MainActivity : Activity() {
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, enabled).apply()
         status.text = "通常チャット専用モード: ${if (enabled) "ON" else "OFF"}"
         updateChromeForPictureInPicture()
-        loadUrl(withAppFlags(currentUrl()))
+        applyChatOnlyModeToPage(enabled)
+    }
+
+    private fun applyChatOnlyModeToPage(enabled: Boolean) {
+        if (!::videoSession.isInitialized) return
+        val value = if (enabled) "1" else "0"
+        val method = if (enabled) "add" else "remove"
+        val script = """
+            (() => {
+              try { localStorage.setItem('ytcc-app-chat-only-enabled', '$value'); } catch (_) {}
+              document.documentElement.classList.$method('ytcc-chat-only');
+              if (document.body) document.body.classList.$method('ytcc-chat-only');
+              window.dispatchEvent(new Event('ytcc-chat-only-change'));
+              window.dispatchEvent(new Event('resize'));
+            })()
+        """.trimIndent()
+        activeSession().loadUri("javascript:${Uri.encode(script)}")
     }
 
     private fun withAppFlags(rawUrl: String): String {
