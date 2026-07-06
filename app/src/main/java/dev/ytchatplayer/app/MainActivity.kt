@@ -15,6 +15,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -36,9 +37,15 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Switch
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.radiobutton.MaterialRadioButton
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
@@ -372,8 +379,7 @@ class MainActivity : Activity() {
         btnFullscreen = toolbarIconButton("全画面表示", R.drawable.ic_fullscreen) { triggerYouTubeFullScreen() }
         addNavButton(btnFullscreen)
 
-        val btnSettings = toolbarButton("⚙", onClick = { showSettingsMenu() })
-        addNavButton(btnSettings)
+        addNavButton(toolbarIconButton("設定", R.drawable.ic_settings) { showSettingsMenu() })
 
         addNavButton(toolbarIconButton("更新", R.drawable.ic_refresh) { activeSession().reload() })
         root.addView(navBar, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -404,80 +410,86 @@ class MainActivity : Activity() {
     }
 
     private fun showSettingsMenu() {
-        val root = LinearLayout(this).apply {
+        val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
+        val context = dialog.context
+        val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(16), dp(24), dp(24))
+            setPadding(dp(20), dp(10), dp(20), dp(24))
         }
 
-        fun createSettingRow(
-            title: String,
-            isChecked: Boolean,
-            onCheckedChange: (Boolean) -> Unit,
-            onSettingsClick: () -> Unit
-        ): LinearLayout {
-            val row = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(12), 0, dp(12))
-            }
-            val switch = Switch(this@MainActivity).apply {
-                text = title
-                textSize = 16f
-                this.isChecked = isChecked
-                setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
-            }
-            val settingsBtn = Button(this@MainActivity).apply {
-                text = "設定"
-                textSize = 12f
-                setPadding(dp(16), dp(8), dp(16), dp(8))
-                minHeight = 0
-                minWidth = 0
-                setTextColor(Color.parseColor("#1976D2"))
-                applyModernRipple(cornerRadiusDp = 16, bgColor = 0x101976D2)
-                setOnClickListener { onSettingsClick() }
-            }
-            row.addView(switch, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(settingsBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = dp(8)
-            })
-            return row
+        root.addView(View(context).apply {
+            background = roundedDrawable(Color.parseColor("#5E5E5E"), 2)
+        }, LinearLayout.LayoutParams(dp(44), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(16)
+        })
+
+        val header = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
+        val headerText = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        headerText.addView(TextView(context).apply {
+            text = "アプリの設定"
+            textSize = 22f
+            setTextColor(Color.parseColor("#F5F5F5"))
+            includeFontPadding = false
+        })
+        headerText.addView(TextView(context).apply {
+            text = "拡張機能と再生まわりの設定"
+            textSize = 12f
+            setTextColor(Color.parseColor("#A8A8A8"))
+        })
+        header.addView(headerText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "閉じる"
+            minHeight = dp(36)
+            minimumHeight = dp(36)
+            setOnClickListener { dialog.dismiss() }
+        })
+        root.addView(header)
 
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("アプリの設定")
-            .setView(root)
-            .setPositiveButton("閉じる", null)
-            .create()
-
-        root.addView(createSettingRow(
+        root.addView(materialSwitchCard(
+            context = context,
             title = "YT Chat Cleaner",
+            summary = "名前、アイコン、チャット幅などを調整",
             isChecked = youtubeChatCleanerEnabled,
             onCheckedChange = { checked -> setPageFlag(PREF_YCC_ENABLED, "YouTubeChatCleaner", checked) },
-            onSettingsClick = {
+            actionLabel = "設定",
+            onActionClick = {
                 dialog.dismiss()
                 showExtensionPopup(yccExtension, "popup.html", "YouTubeChatCleaner", showSaveButton = false, reloadAfterSave = false)
             }
         ))
 
-        root.addView(createSettingRow(
+        root.addView(materialSwitchCard(
+            context = context,
             title = "LiveChat Flusher",
+            summary = "読み込み方式・自動オープンなどを調整",
             isChecked = liveChatFlusherEnabled,
             onCheckedChange = { checked -> setPageFlag(PREF_LCF_ENABLED, "LiveChat Flusher", checked) },
-            onSettingsClick = {
+            actionLabel = "設定",
+            onActionClick = {
                 dialog.dismiss()
                 showExtensionPopup(lcfExtension, "options/options.html", "LiveChat Flusher", showSaveButton = true, reloadAfterSave = true)
             }
         ))
 
-        root.addView(createSwitchOnlyRow(
+        root.addView(materialSwitchCard(
+            context = context,
             title = "通常チャット専用モード",
+            summary = "動画ページでチャットだけを大きく表示",
             isChecked = chatOnlyModeEnabled,
             isEnabled = activeSurface == BrowserSurface.VIDEO,
             onCheckedChange = { checked -> setChatOnlyMode(checked) },
         ))
 
-        root.addView(createSwitchOnlyRow(
+        root.addView(materialSwitchCard(
+            context = context,
             title = "PiPを×で閉じたら一時停止",
+            summary = "PiPを閉じる操作で動画も停止",
             isChecked = pausePlaybackOnPipClose,
             onCheckedChange = { checked ->
                 pausePlaybackOnPipClose = checked
@@ -486,92 +498,204 @@ class MainActivity : Activity() {
             },
         ))
 
-        // 区切り線
-        val divider = View(this).apply {
-            setBackgroundColor(0xFFE0E0E0.toInt())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
-                setMargins(0, dp(12), 0, dp(12))
-            }
-        }
-        root.addView(divider)
-
-        // FPS設定行
-        val fpsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(8), 0, dp(8))
-        }
-        val fpsText = TextView(this).apply {
-            text = "FPS制限機能 (負担軽減)\n現在: ${if (currentOsFps > 0) "${currentOsFps}fps" else "自動"}"
-            textSize = 16f
-            setTextColor(Color.BLACK)
-        }
-        val fpsBtn = Button(this).apply {
-            text = "変更"
-            textSize = 12f
-            setPadding(dp(16), dp(8), dp(16), dp(8))
-            minHeight = 0
-            minWidth = 0
-            setTextColor(Color.parseColor("#1976D2"))
-            applyModernRipple(cornerRadiusDp = 16, bgColor = 0x101976D2)
-            setOnClickListener {
+        root.addView(materialActionCard(
+            context = context,
+            title = "FPS制限機能",
+            summary = "現在: ${if (currentOsFps > 0) "${currentOsFps}fps" else "自動"}",
+            actionLabel = "変更",
+            onClick = {
                 dialog.dismiss()
                 showOsFpsDialog()
             }
-        }
-        fpsRow.addView(fpsText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        fpsRow.addView(fpsBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            marginStart = dp(8)
-        })
-        root.addView(fpsRow)
+        ))
+        root.addView(View(context), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(20)))
 
+        val scrollView = ScrollView(context).apply {
+            isFillViewport = true
+            clipToPadding = false
+            addView(root)
+        }
+        dialog.setContentView(scrollView)
+        dialog.setOnShowListener {
+            val availableHeight = resources.displayMetrics.heightPixels - statusBarHeight() - dp(24)
+            val preferredHeight = (resources.displayMetrics.heightPixels * 0.78f).toInt()
+            val targetHeight = minOf(availableHeight, maxOf(dp(620), preferredHeight))
+            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let { sheet ->
+                sheet.layoutParams = sheet.layoutParams.apply {
+                    height = targetHeight
+                }
+                sheet.requestLayout()
+            }
+            dialog.behavior.skipCollapsed = true
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
         dialog.show()
     }
 
-    private fun createSwitchOnlyRow(
+    private fun materialSwitchCard(
+        context: Context,
         title: String,
+        summary: String,
         isChecked: Boolean,
         isEnabled: Boolean = true,
+        actionLabel: String? = null,
+        onActionClick: (() -> Unit)? = null,
         onCheckedChange: (Boolean) -> Unit,
-    ): LinearLayout {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(12), 0, dp(12))
+    ): MaterialCardView =
+        settingsCard(context, isEnabled).apply {
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+            }
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val textColumn = settingTextColumn(context, title, summary)
+            val switch = MaterialSwitch(context).apply {
+                this.isEnabled = isEnabled
+                this.isChecked = isChecked
+                setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
+            }
+            row.addView(textColumn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(switch)
+            content.addView(row)
+
+            if (actionLabel != null && onActionClick != null) {
+                content.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    text = actionLabel
+                    minHeight = dp(38)
+                    minimumHeight = dp(38)
+                    setOnClickListener { onActionClick() }
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(10)
+                    gravity = Gravity.END
+                })
+            }
+            addView(content)
+            if (isEnabled) {
+                setOnClickListener { switch.isChecked = !switch.isChecked }
+            }
+        }
+
+    private fun materialActionCard(
+        context: Context,
+        title: String,
+        summary: String,
+        actionLabel: String,
+        onClick: () -> Unit,
+    ): MaterialCardView =
+        settingsCard(context, true).apply {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+            }
+            row.addView(settingTextColumn(context, title, summary), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = actionLabel
+                minHeight = dp(38)
+                minimumHeight = dp(38)
+                setOnClickListener { onClick() }
+            })
+            addView(row)
+            setOnClickListener { onClick() }
+        }
+
+    private fun settingsCard(context: Context, isEnabled: Boolean): MaterialCardView =
+        MaterialCardView(context).apply {
+            radius = dp(22).toFloat()
+            setCardBackgroundColor(Color.parseColor("#222222"))
+            setStrokeColor(Color.parseColor("#343434"))
+            strokeWidth = dp(1)
             alpha = if (isEnabled) 1f else 0.45f
+            useCompatPadding = false
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(12)
+            }
         }
-        val switch = Switch(this).apply {
-            text = title
-            textSize = 16f
-            this.isEnabled = isEnabled
-            this.isChecked = isChecked
-            setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
-        }
-        row.addView(switch, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        return row
+
+    private fun settingTextColumn(context: Context, title: String, summary: String): LinearLayout =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(context).apply {
+                text = title
+                textSize = 16f
+                setTextColor(Color.parseColor("#F5F5F5"))
+                includeFontPadding = false
+            })
+            addView(TextView(context).apply {
+                text = summary
+                textSize = 12f
+                setTextColor(Color.parseColor("#A8A8A8"))
+                setPadding(0, dp(5), dp(12), 0)
+            })
     }
 
     private fun showOsFpsDialog() {
         val options = arrayOf("自動 (制限なし)", "120 fps", "60 fps", "30 fps", "15 fps")
         val values = intArrayOf(0, 120, 60, 30, 15)
-        val selectedIndex = values.indexOf(currentOsFps).takeIf { it >= 0 } ?: 0
-        
-        val titleView = TextView(this).apply {
-            text = "FPS制限機能\n\n画面の滑らかさを制限することで、スマホの発熱や負担を軽くすることができます。"
-            setPadding(dp(24), dp(24), dp(24), dp(8))
-            textSize = 16f
+        val dialog = BottomSheetDialog(this, R.style.YTFlowSettingsBottomSheetDialog)
+        val context = dialog.context
+        val controlTint = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(Color.parseColor("#FF0033"), Color.parseColor("#9A949D")),
+        )
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(10), dp(20), dp(24))
         }
+        root.addView(View(context).apply {
+            background = roundedDrawable(Color.parseColor("#5E5E5E"), 2)
+        }, LinearLayout.LayoutParams(dp(44), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(18)
+        })
+        root.addView(TextView(context).apply {
+            text = "FPS制限機能"
+            textSize = 22f
+            setTextColor(Color.parseColor("#F5F5F5"))
+            includeFontPadding = false
+        })
+        root.addView(TextView(context).apply {
+            text = "画面の滑らかさを制限して負担を軽くします。"
+            textSize = 12f
+            setTextColor(Color.parseColor("#A8A8A8"))
+            setPadding(0, dp(6), 0, dp(12))
+        })
+        options.forEachIndexed { index, label ->
+            root.addView(MaterialRadioButton(context).apply {
+                text = label
+                textSize = 16f
+                setTextColor(Color.parseColor("#F5F5F5"))
+                buttonTintList = controlTint
+                isChecked = values[index] == currentOsFps
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    currentOsFps = values[index]
+                    prefs.edit().putInt(PREF_FPS_LIMIT, currentOsFps).apply()
+                    applyEffectiveOsFps(showToast = true)
+                    dialog.dismiss()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
+        }
+        root.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "キャンセル"
+            minHeight = dp(40)
+            minimumHeight = dp(40)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+            gravity = Gravity.END
+        })
 
-        AlertDialog.Builder(this)
-            .setCustomTitle(titleView)
-            .setSingleChoiceItems(options, selectedIndex) { dialog, which ->
-                currentOsFps = values[which]
-                prefs.edit().putInt(PREF_FPS_LIMIT, currentOsFps).apply()
-                applyEffectiveOsFps(showToast = true)
-                dialog.dismiss()
-            }
-            .setNegativeButton("キャンセル", null)
-            .show()
+        dialog.setContentView(root)
+        dialog.setOnShowListener {
+            dialog.behavior.skipCollapsed = true
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
     }
 
     private fun applyOsFps(fps: Int, showToast: Boolean = false) {

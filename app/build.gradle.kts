@@ -45,5 +45,6 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.material:material:1.14.0")
     implementation("org.mozilla.geckoview:geckoview:151.0.20260608154138")
 }

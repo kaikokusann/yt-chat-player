@@ -11,4 +11,25 @@
         <item name="android:windowSplashScreenIconBackgroundColor">#0F0F0F</item>
         <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
     </style>
+
+    <style name="YTFlowSettingsBottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="colorPrimary">@color/settings_accent</item>
+        <item name="colorSecondary">@color/settings_accent</item>
+        <item name="colorSurface">@color/settings_sheet_background</item>
+        <item name="colorOnSurface">@color/settings_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/settings_text_secondary</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="bottomSheetStyle">@style/YTFlowSettingsBottomSheet</item>
+    </style>
+
+    <style name="YTFlowSettingsBottomSheet" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="backgroundTint">@color/settings_sheet_background</item>
+        <item name="shapeAppearanceOverlay">@style/YTFlowSettingsBottomSheetShape</item>
+    </style>
+
+    <style name="YTFlowSettingsBottomSheetShape">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">28dp</item>
+        <item name="cornerSizeTopRight">28dp</item>
+    </style>
 </resources>
