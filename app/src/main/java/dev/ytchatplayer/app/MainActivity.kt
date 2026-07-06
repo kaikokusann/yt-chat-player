@@ -36,6 +36,7 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import org.mozilla.geckoview.GeckoRuntime
@@ -60,8 +61,6 @@ class MainActivity : Activity() {
     private lateinit var address: EditText
     private lateinit var status: TextView
     private lateinit var prefs: SharedPreferences
-    private lateinit var btnYcc: Button
-    private lateinit var btnLcf: Button
     private lateinit var btnFullscreen: ImageButton
 
     private var yccExtension: WebExtension? = null
@@ -85,7 +84,10 @@ class MainActivity : Activity() {
     private lateinit var notificationManager: NotificationManager
     private var youtubeChatCleanerEnabled = true
     private var liveChatFlusherEnabled = true
+    private var pausePlaybackOnPipClose = true
+    private var wasRecentlyInPictureInPicture = false
     private var suppressFailedPageStopUntil = 0L
+    private var currentOsFps = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,11 +97,13 @@ class MainActivity : Activity() {
         requestNotificationPermissionIfNeeded()
         youtubeChatCleanerEnabled = prefs.getBoolean(PREF_YCC_ENABLED, true)
         liveChatFlusherEnabled = prefs.getBoolean(PREF_LCF_ENABLED, true)
+        pausePlaybackOnPipClose = prefs.getBoolean(PREF_PAUSE_ON_PIP_CLOSE, true)
+        currentOsFps = prefs.getInt(PREF_FPS_LIMIT, 0)
+        applyOsFps(currentOsFps, showToast = false)
         setContentView(createUi())
         createBrowser()
         installBuiltInExtensions()
         loadInitialUrl(intent)
-        updateToggleButtonsUi()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -139,6 +143,14 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+    }
+
+    override fun onStop() {
+        if (pausePlaybackOnPipClose && wasRecentlyInPictureInPicture && ::videoSession.isInitialized) {
+            pauseVideoPlayback()
+            hideMediaNotification()
+        }
+        super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -183,7 +195,14 @@ class MainActivity : Activity() {
         newConfig: Configuration
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        val wasInPictureInPicture = inPictureInPicture
         inPictureInPicture = isInPictureInPictureMode
+        wasRecentlyInPictureInPicture = isInPictureInPictureMode || wasInPictureInPicture
+        if (!isInPictureInPictureMode) {
+            geckoView.postDelayed({
+                if (!inPictureInPicture && !isFinishing) wasRecentlyInPictureInPicture = false
+            }, 1200)
+        }
         setPageAppPictureInPictureFlag(isInPictureInPictureMode)
         if (isInPictureInPictureMode) showOrUpdateMediaNotification()
         updateChromeForPictureInPicture()
@@ -355,43 +374,185 @@ class MainActivity : Activity() {
         addNavButton(toolbarIconButton("進む", R.drawable.ic_arrow_forward) { handleForward() })
         btnFullscreen = toolbarIconButton("全画面表示", R.drawable.ic_fullscreen) { triggerYouTubeFullScreen() }
         addNavButton(btnFullscreen)
-        btnYcc = toolbarButton(
-            "YCC",
-            onClick = {
-                showExtensionPopup(
-                    extension = yccExtension,
-                    pagePath = "popup.html",
-                    label = "YouTubeChatCleaner",
-                    showSaveButton = false,
-                    reloadAfterSave = false,
-                )
-            },
-            onLongClick = {
-                togglePageFlag(PREF_YCC_ENABLED, "YouTubeChatCleaner")
-                true
-            },
-        )
-        addNavButton(btnYcc)
-        btnLcf = toolbarButton(
-            "LCF",
-            onClick = {
-                showExtensionPopup(
-                    extension = lcfExtension,
-                    pagePath = "options/options.html",
-                    label = "LiveChat Flusher",
-                    showSaveButton = true,
-                    reloadAfterSave = true,
-                )
-            },
-            onLongClick = {
-                togglePageFlag(PREF_LCF_ENABLED, "LiveChat Flusher")
-                true
-            },
-        )
-        addNavButton(btnLcf)
+
+        val btnSettings = toolbarButton("⚙", onClick = { showSettingsMenu() })
+        addNavButton(btnSettings)
+
         addNavButton(toolbarIconButton("更新", R.drawable.ic_refresh) { activeSession().reload() })
         root.addView(navBar, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         return root
+    }
+
+    private fun showSettingsMenu() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(16), dp(24), dp(24))
+        }
+
+        fun createSettingRow(
+            title: String,
+            isChecked: Boolean,
+            onCheckedChange: (Boolean) -> Unit,
+            onSettingsClick: () -> Unit
+        ): LinearLayout {
+            val row = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(12), 0, dp(12))
+            }
+            val switch = Switch(this@MainActivity).apply {
+                text = title
+                textSize = 16f
+                this.isChecked = isChecked
+                setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
+            }
+            val settingsBtn = Button(this@MainActivity).apply {
+                text = "設定"
+                textSize = 12f
+                setPadding(dp(16), dp(8), dp(16), dp(8))
+                minHeight = 0
+                minWidth = 0
+                setTextColor(Color.parseColor("#1976D2"))
+                applyModernRipple(cornerRadiusDp = 16, bgColor = 0x101976D2)
+                setOnClickListener { onSettingsClick() }
+            }
+            row.addView(switch, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(settingsBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(8)
+            })
+            return row
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("アプリの設定")
+            .setView(root)
+            .setPositiveButton("閉じる", null)
+            .create()
+
+        root.addView(createSettingRow(
+            title = "YouTube Chat Cleaner",
+            isChecked = youtubeChatCleanerEnabled,
+            onCheckedChange = { checked -> setPageFlag(PREF_YCC_ENABLED, "YouTubeChatCleaner", checked) },
+            onSettingsClick = {
+                dialog.dismiss()
+                showExtensionPopup(yccExtension, "popup.html", "YouTubeChatCleaner", showSaveButton = false, reloadAfterSave = false)
+            }
+        ))
+
+        root.addView(createSettingRow(
+            title = "LiveChat Flusher",
+            isChecked = liveChatFlusherEnabled,
+            onCheckedChange = { checked -> setPageFlag(PREF_LCF_ENABLED, "LiveChat Flusher", checked) },
+            onSettingsClick = {
+                dialog.dismiss()
+                showExtensionPopup(lcfExtension, "options/options.html", "LiveChat Flusher", showSaveButton = true, reloadAfterSave = true)
+            }
+        ))
+
+        root.addView(createSwitchOnlyRow(
+            title = "PiPを×で閉じたら再生を停止",
+            isChecked = pausePlaybackOnPipClose,
+            onCheckedChange = { checked ->
+                pausePlaybackOnPipClose = checked
+                prefs.edit().putBoolean(PREF_PAUSE_ON_PIP_CLOSE, checked).apply()
+                status.text = "PiP終了時の再生停止: ${if (checked) "ON" else "OFF"}"
+            },
+        ))
+
+        // 区切り線
+        val divider = View(this).apply {
+            setBackgroundColor(0xFFE0E0E0.toInt())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
+                setMargins(0, dp(12), 0, dp(12))
+            }
+        }
+        root.addView(divider)
+
+        // FPS設定行
+        val fpsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        val fpsText = TextView(this).apply {
+            text = "FPS制限機能 (負担軽減)\n現在: ${if (currentOsFps > 0) "${currentOsFps}fps" else "自動"}"
+            textSize = 16f
+            setTextColor(Color.BLACK)
+        }
+        val fpsBtn = Button(this).apply {
+            text = "変更"
+            textSize = 12f
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            minHeight = 0
+            minWidth = 0
+            setTextColor(Color.parseColor("#1976D2"))
+            applyModernRipple(cornerRadiusDp = 16, bgColor = 0x101976D2)
+            setOnClickListener {
+                dialog.dismiss()
+                showOsFpsDialog()
+            }
+        }
+        fpsRow.addView(fpsText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        fpsRow.addView(fpsBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = dp(8)
+        })
+        root.addView(fpsRow)
+
+        dialog.show()
+    }
+
+    private fun createSwitchOnlyRow(
+        title: String,
+        isChecked: Boolean,
+        onCheckedChange: (Boolean) -> Unit,
+    ): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, dp(12))
+        }
+        val switch = Switch(this).apply {
+            text = title
+            textSize = 16f
+            this.isChecked = isChecked
+            setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
+        }
+        row.addView(switch, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        return row
+    }
+
+    private fun showOsFpsDialog() {
+        val options = arrayOf("自動 (制限なし)", "120 fps", "60 fps", "30 fps", "15 fps")
+        val values = intArrayOf(0, 120, 60, 30, 15)
+        val selectedIndex = values.indexOf(currentOsFps).takeIf { it >= 0 } ?: 0
+        
+        val titleView = TextView(this).apply {
+            text = "FPS制限機能\n\n画面の滑らかさを制限することで、スマホの発熱や負担を軽くすることができます。"
+            setPadding(dp(24), dp(24), dp(24), dp(8))
+            textSize = 16f
+        }
+
+        AlertDialog.Builder(this)
+            .setCustomTitle(titleView)
+            .setSingleChoiceItems(options, selectedIndex) { dialog, which ->
+                currentOsFps = values[which]
+                prefs.edit().putInt(PREF_FPS_LIMIT, currentOsFps).apply()
+                applyOsFps(currentOsFps, showToast = true)
+                dialog.dismiss()
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
+    }
+
+    private fun applyOsFps(fps: Int, showToast: Boolean = false) {
+        // モバイルセッション（ホームや検索画面）表示中は制限を無効（0）にする
+        val targetFps = if (activeSurface == BrowserSurface.MOBILE) 0 else fps
+        val params = window.attributes
+        params.preferredRefreshRate = targetFps.toFloat()
+        window.attributes = params
+        if (showToast && fps > 0) {
+            Toast.makeText(this, "動画再生時のFPS制限を ${fps} に設定しました", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun toolbarButton(label: String, onClick: () -> Unit, onLongClick: (() -> Boolean)? = null): Button =
@@ -400,9 +561,10 @@ class MainActivity : Activity() {
             textSize = 10f
             minHeight = 0
             minWidth = 0
-            setPadding(dp(2), 0, dp(2), 0)
+            setPadding(dp(8), dp(4), dp(8), dp(4))
             setTextColor(Color.WHITE)
-            setBackgroundColor(0xFF2A2A2A.toInt())
+            // 透明ではなく、少し明るいグレーの角丸背景にする
+            applyModernRipple(cornerRadiusDp = 12, bgColor = 0xFF2A2A2A.toInt())
             setOnClickListener { onClick() }
             if (onLongClick != null) {
                 setOnLongClickListener { onLongClick() }
@@ -417,8 +579,11 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER
             setMinimumHeight(0)
             setMinimumWidth(0)
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            setBackgroundColor(0xFF2A2A2A.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            
+            // 透明ではなく、少し明るいグレーの角丸背景にする
+            applyModernRipple(cornerRadiusDp = 12, bgColor = 0xFF2A2A2A.toInt())
+            
             setOnClickListener { onClick() }
         }
 
@@ -896,7 +1061,7 @@ class MainActivity : Activity() {
         root.addView(header, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
 
         val hint = TextView(this).apply {
-            text = "有効・無効は下部の${if (label.contains("Flusher")) "LCF" else "YCC"}ボタンを長押し"
+            text = "有効・無効の切り替えは、メニューの「⚙」ボタンから行えます"
             textSize = 12f
             setTextColor(0xFF5F6368.toInt())
             setPadding(dp(12), dp(8), dp(12), dp(8))
@@ -964,6 +1129,7 @@ class MainActivity : Activity() {
         
         if (fullScreen) setAppFullScreen(false)
         activeSurface = surface
+        applyOsFps(currentOsFps, showToast = false) // 表示画面が変わったのでFPS制限を再評価・適用
         geckoView.setSession(activeSession())
         runtime.webExtensionController.setTabActive(activeSession(), true)
         address.setText(currentUrl())
@@ -1350,20 +1516,15 @@ class MainActivity : Activity() {
         videoSession.loadUri("javascript:${Uri.encode(script)}")
     }
 
-    private fun togglePageFlag(prefKey: String, label: String) {
-        val next = !currentToggleValue(prefKey)
-        prefs.edit().putBoolean(prefKey, next).apply()
+    private fun setPageFlag(prefKey: String, label: String, enabled: Boolean) {
+        prefs.edit().putBoolean(prefKey, enabled).apply()
         when (prefKey) {
-            PREF_YCC_ENABLED -> youtubeChatCleanerEnabled = next
-            PREF_LCF_ENABLED -> liveChatFlusherEnabled = next
+            PREF_YCC_ENABLED -> youtubeChatCleanerEnabled = enabled
+            PREF_LCF_ENABLED -> liveChatFlusherEnabled = enabled
         }
-        status.text = "$label: ${if (next) "ON" else "OFF"}"
-        updateToggleButtonsUi()
+        status.text = "$label: ${if (enabled) "ON" else "OFF"}"
         loadUrl(withAppFlags(currentUrl()))
     }
-
-    private fun currentToggleValue(prefKey: String): Boolean =
-        prefs.getBoolean(prefKey, true)
 
     private fun withAppFlags(rawUrl: String): String {
         val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return rawUrl
@@ -1493,26 +1654,30 @@ class MainActivity : Activity() {
         return if (id > 0) resources.getDimensionPixelSize(id) else 0
     }
 
-    private fun updateToggleButtonsUi() {
-        if (::btnYcc.isInitialized) {
-            btnYcc.text = if (youtubeChatCleanerEnabled) "YCC: ON" else "YCC: OFF"
-            btnYcc.setTextColor(if (youtubeChatCleanerEnabled) 0xFF4CAF50.toInt() else 0xFFF44336.toInt())
-            btnYcc.setBackgroundColor(if (youtubeChatCleanerEnabled) 0xFF1E2F1E.toInt() else 0xFF2F1E1E.toInt())
-        }
-        if (::btnLcf.isInitialized) {
-            btnLcf.text = if (liveChatFlusherEnabled) "LCF: ON" else "LCF: OFF"
-            btnLcf.setTextColor(if (liveChatFlusherEnabled) 0xFF4CAF50.toInt() else 0xFFF44336.toInt())
-            btnLcf.setBackgroundColor(if (liveChatFlusherEnabled) 0xFF1E2F1E.toInt() else 0xFF2F1E1E.toInt())
-        }
+
+
+    private fun View.applyModernRipple(cornerRadiusDp: Int = 8, bgColor: Int = Color.TRANSPARENT) {
+        // rippleColorをシステム属性に頼らず、明示的に「白の半透明(約25%不透明)」に指定し、黒/グレー背景でも確実に見えるようにする
+        val rippleColor = android.content.res.ColorStateList.valueOf(Color.parseColor("#40FFFFFF"))
+        
+        val content = if (bgColor != Color.TRANSPARENT) {
+            roundedDrawable(bgColor, cornerRadiusDp)
+        } else null
+        
+        val mask = roundedDrawable(Color.WHITE, cornerRadiusDp)
+        
+        background = android.graphics.drawable.RippleDrawable(rippleColor, content, mask)
     }
 
     companion object {
+        private const val PREF_FPS_LIMIT = "pref_fps_limit"
         private const val HOME_URL = "https://m.youtube.com/"
         private const val TEST_URL = "https://www.youtube.com/watch?v=6-9qQ0ifz2Y"
         private const val TAG = "YouTubeChatCleaner"
         private const val BLACK = Color.BLACK
         private const val PREF_YCC_ENABLED = "ycc_enabled"
         private const val PREF_LCF_ENABLED = "lcf_enabled"
+        private const val PREF_PAUSE_ON_PIP_CLOSE = "pause_on_pip_close"
         private const val PREF_LAST_VIDEO_URL = "last_video_url"
         private const val PREF_LAST_VIDEO_TIME = "last_video_time"
         private const val MEDIA_CHANNEL_ID = "ytchat_media"
