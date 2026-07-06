@@ -23,7 +23,6 @@ const APP_NORMAL_CHAT_ATTR = 'data-ytlcf-app-normal-chat-enabled';
 const APP_NORMAL_CHAT_FONT_SCALE_ATTR = 'data-ytlcf-app-normal-chat-font-scale';
 const APP_NORMAL_CHAT_SHOW_NAME_ATTR = 'data-ytlcf-app-normal-chat-show-name';
 const APP_NORMAL_CHAT_SHOW_PHOTO_ATTR = 'data-ytlcf-app-normal-chat-show-photo';
-const APP_NORMAL_CHAT_ACTIVE_CLASS = 'ytlcf-app-normal-chat-active';
 
 export class NormalChatView {
 	/** @type {HTMLDivElement} */
@@ -429,7 +428,6 @@ export class LiveChatController {
 		this.player = player;
 
 		this.layer = new LiveChatLayer(this);
-		this.normalChat = new NormalChatView();
 		const root = this.layer.root;
 		this.layoutCache = new LiveChatLayoutCache(root);
 		this.itemFactory = new LiveChatItemFactory();
@@ -467,22 +465,6 @@ export class LiveChatController {
 		this.panel = new LiveChatPanel(this);
 		this.contextmenu = new LiveChatContextMenu();
 		this.abortController = new AbortController();
-		const syncNormalChat = () => this.applyNormalChatSettings();
-		window.addEventListener('storage', syncNormalChat, { passive: true });
-		window.addEventListener('ytlcf-normal-chat-change', syncNormalChat, { passive: true });
-		window.addEventListener('message', event => {
-			if (event.data?.type === 'ytlcf-normal-chat-change') syncNormalChat();
-		}, { passive: true });
-		this.normalChatObserver = new MutationObserver(syncNormalChat);
-		this.normalChatObserver.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: [
-				APP_NORMAL_CHAT_ATTR,
-				APP_NORMAL_CHAT_FONT_SCALE_ATTR,
-				APP_NORMAL_CHAT_SHOW_NAME_ATTR,
-				APP_NORMAL_CHAT_SHOW_PHOTO_ATTR,
-			],
-		});
 	}
 
 	async start() {
@@ -501,10 +483,8 @@ export class LiveChatController {
 		await this.panel.createForm();
 
 		document.getElementById(this.layer.element.id)?.remove();
-		document.getElementById(this.normalChat.element.id)?.remove();
 		if (s.others.disabled) this.layer.hide();
 		videoContainer.after(this.layer.element);
-		(document.body || document.documentElement).append(this.normalChat.element);
 
 		const promises = [
 			// fetching your channel ID and set styles for you
@@ -519,7 +499,6 @@ export class LiveChatController {
 		this.#setupPanel();
 		this.layer.element.style.cssText += '--yt-lcf-layer-css: below;' + s.styles.layer_css;
 		await Promise.allSettled(promises);
-		this.applyNormalChatSettings();
 		this.#startSendingFrame(video);
 	}
 
@@ -912,17 +891,6 @@ export class LiveChatController {
 		le.after(canvas);
 	}
 
-	applyNormalChatSettings() {
-		this.normalChat.syncFromStorage();
-		document.documentElement.classList.toggle(APP_NORMAL_CHAT_ACTIVE_CLASS, this.normalChat.enabled);
-		if (this.normalChat.enabled) {
-			this.layer.hide();
-			this.layoutCache.clear();
-		} else {
-			if (!s.others.disabled) this.layer.show();
-		}
-	}
-
 	/**
 	 * Fires chat actions.
 	 * @param {CustomEvent<LiveChat.LiveChatItemAction[]>} event
@@ -930,8 +898,7 @@ export class LiveChatController {
 	async #onAction(event) {
 		const le = this.layer.element;
 		const root = this.layer.root;
-		const normalChatEnabled = this.normalChat.enabled;
-		if ((isNotPip() && document.visibilityState === 'hidden') || (!normalChatEnabled && (le.hidden || le.parentElement?.classList.contains('paused-mode')))) return;
+		if ((isNotPip() && document.visibilityState === 'hidden') || le.hidden || le.parentElement?.classList.contains('paused-mode')) return;
 
 		/** @type {Record<string, LiveChat.LiveChatItemAction[]>} */
 		const filtered = { add: [], delete: [], delete_author: [], replace: [] };
@@ -1006,8 +973,6 @@ export class LiveChatController {
 		}
 		return renderChatItem(item, this.itemFactory).then(el => {
 			if (!el) return;
-			this.normalChat.add(el);
-			if (this.normalChat.enabled) return;
 			callback(el);
 			if (this.layer.root.getElementById(el.id)) {
 				logger.debug('Skipped rendering chat item (already exists on the layer):', `#${el.id}`);
@@ -1025,11 +990,10 @@ export class LiveChatController {
 	#deleteChatItem(action) {
 		// @ts-expect-error
 		const id = action.markChatItemAsDeletedAction.targetItemId;
-		const deletedFromNormalChat = this.normalChat.delete(id);
 		if (this.layoutCache.delete(id).some(v => v)) {
 			const target = this.layer.root.getElementById(id);
 			target?.remove();
-		} else if (!deletedFromNormalChat) {
+		} else {
 			logger.warn(`Failed to delete message: #${id}`);
 		}
 	}
@@ -1040,13 +1004,12 @@ export class LiveChatController {
 	#deleteChatItemByAuthor(action) {
 		// @ts-expect-error
 		const id = action.markChatItemsByAuthorAsDeletedAction.externalChannelId;
-		const deletedFromNormalChat = this.normalChat.deleteByAuthor(id);
 		const targets = this.layer.root.querySelectorAll(`[data-author-id="${id}"]`);
 		for (const target of targets) {
 			this.layoutCache.delete(target.id);
 			target.remove();
 		}
-		if (!deletedFromNormalChat && targets.length === 0) {
+		if (targets.length === 0) {
 			logger.warn(`Failed to delete messages by author: #${id}`);
 		}
 	}
@@ -1059,12 +1022,10 @@ export class LiveChatController {
 		const id = action.replaceChatItemAction.targetItemId;
 		const target = this.layer.root.getElementById(id);
 		const item = action.replaceChatItemAction?.replacementItem;
-		if ((target || this.normalChat.enabled) && item) {
+		if (target && item) {
 			renderChatItem(item, this.itemFactory).then(el => {
 				if (!el) return;
-				this.normalChat.delete(id);
-				this.normalChat.add(el);
-				target?.replaceWith(el);
+				target.replaceWith(el);
 			}).catch(logger.warn);
 		} else {
 			logger.warn(`Failed to replace message: #${id}`);
@@ -1103,9 +1064,6 @@ export class LiveChatController {
 
 	close() {
 		this.unlisten();
-		this.normalChatObserver?.disconnect();
-		document.documentElement.classList.remove(APP_NORMAL_CHAT_ACTIVE_CLASS);
 		this.layer.clear();
-		this.normalChat.clear();
 	}
 }

@@ -10,15 +10,6 @@ const DEFAULTS = {
 };
 
 const APP_ENABLED_KEY = 'ytcc-app-ycc-enabled';
-const CHAT_ONLY_KEY = 'ytcc-app-chat-only-enabled';
-const CHAT_ONLY_CLASS = 'ytcc-chat-only';
-const CHAT_HEADER_SELECTORS = [
-  'yt-live-chat-header-renderer',
-  'yt-live-chat-renderer #header',
-  '#chat-header'
-];
-
-let chatOnlyPlaybackTimerIds = [];
 
 const CLASS_MAP = {
   enabled: 'ytcc-enabled',
@@ -58,7 +49,6 @@ async function init() {
   // チャットパネルの表示/非表示を監視
   observeChatVisibility();
   window.addEventListener('storage', () => applyConfig(config));
-  window.addEventListener('ytcc-chat-only-change', () => applyConfig(config));
 
 }
 
@@ -94,7 +84,6 @@ function applyConfig(config) {
       window.dispatchEvent(new Event('resize'));
     }, 100);
   }
-  applyChatOnlyMode();
 }
 
 function isAppEnabled() {
@@ -111,126 +100,6 @@ function clearClasses() {
     root.classList.remove(className);
   }
   root.classList.remove('ytcc-chat-visible');
-  root.classList.remove(CHAT_ONLY_CLASS);
-}
-
-function isChatOnlyEnabled() {
-  try {
-    if (localStorage.getItem(CHAT_ONLY_KEY) === '1') return true;
-    return top?.localStorage?.getItem(CHAT_ONLY_KEY) === '1';
-  } catch (_error) {
-    return false;
-  }
-}
-
-function applyChatOnlyMode() {
-  const enabled = isAppEnabled() && isChatOnlyEnabled() && isChatOnlyEligibleDocument();
-  document.documentElement.classList.toggle(CHAT_ONLY_CLASS, enabled);
-  if (document.body) document.body.classList.toggle(CHAT_ONLY_CLASS, enabled);
-  if (!enabled || isStandaloneChatPage()) {
-    clearChatOnlyPlaybackTimers();
-    return;
-  }
-  scheduleChatOnlyPlaybackControl();
-  window.dispatchEvent(new Event('resize'));
-}
-
-function isChatOnlyEligibleDocument() {
-  return isStandaloneChatPage();
-}
-
-function isStandaloneChatPage() {
-  return location.pathname === '/live_chat' || location.pathname === '/live_chat_replay';
-}
-
-function scheduleChatOnlyPlaybackControl() {
-  clearChatOnlyPlaybackTimers();
-  for (const delay of [0, 500, 1500, 3000]) {
-    const timerId = setTimeout(() => {
-      pauseLiveVideoOnly();
-      window.dispatchEvent(new Event('resize'));
-    }, delay);
-    chatOnlyPlaybackTimerIds.push(timerId);
-  }
-}
-
-function clearChatOnlyPlaybackTimers() {
-  for (const timerId of chatOnlyPlaybackTimerIds) {
-    clearTimeout(timerId);
-  }
-  chatOnlyPlaybackTimerIds = [];
-}
-
-function pauseLiveVideoOnly() {
-  if (detectChatPlaybackKind() !== 'live') return;
-  const mediaDocument = getTopDocument() || document;
-  const video = mediaDocument.querySelector('#movie_player video') || mediaDocument.querySelector('video');
-  try {
-    if (video && !video.paused) video.pause();
-  } catch (_error) {
-    // Ignore playback control failures.
-  }
-  const player = mediaDocument.querySelector('#movie_player');
-  try {
-    if (player && typeof player.pauseVideo === 'function') player.pauseVideo();
-  } catch (_error) {
-    // Ignore playback control failures.
-  }
-}
-
-function detectChatPlaybackKind() {
-  const texts = collectChatHeaderTexts();
-  if (texts.some(text => text.includes('リプレイ'))) return 'archive';
-  if (texts.some(isLiveChatHeaderText)) return 'live';
-  return 'unknown';
-}
-
-function collectChatHeaderTexts() {
-  const docs = collectReadableDocuments();
-  const texts = [];
-  for (const doc of docs) {
-    for (const selector of CHAT_HEADER_SELECTORS) {
-      for (const header of doc.querySelectorAll(selector)) {
-        const text = normalizeText(header.textContent || '');
-        if (text) texts.push(text);
-      }
-    }
-  }
-  return texts;
-}
-
-function collectReadableDocuments() {
-  const docs = [document];
-  const topDocument = getTopDocument();
-  if (topDocument && topDocument !== document) docs.push(topDocument);
-  for (const doc of [...docs]) {
-    for (const iframe of doc.querySelectorAll('iframe')) {
-      try {
-        const iframeDocument = iframe.contentDocument;
-        if (iframeDocument && !docs.includes(iframeDocument)) docs.push(iframeDocument);
-      } catch (_error) {
-        // Ignore cross-origin frames.
-      }
-    }
-  }
-  return docs;
-}
-
-function getTopDocument() {
-  try {
-    return top?.document || null;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function normalizeText(text) {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-function isLiveChatHeaderText(text) {
-  const compactText = text.replace(/\s+/g, '');
-  return compactText.includes('トップチャット') || compactText.startsWith('チャット');
 }
 
 function normalizeChatWidth(value) {

@@ -5,18 +5,23 @@
   const APP_FLAG_PARAMS = {
     ytcc_app_ycc: 'ytcc-app-ycc-enabled',
     ytcc_app_lcf: 'ytcc-app-lcf-enabled',
-    ytcc_app_chat_only: 'ytcc-app-chat-only-enabled',
     ytcc_app_fsassist: FULLSCREEN_ASSIST_KEY
   };
+  const STRIP_ONLY_APP_PARAMS = [
+    'ytcc_app_chat_only',
+    'ytcc_app_normal_chat_font_scale',
+    'ytcc_app_normal_chat_show_name',
+    'ytcc_app_normal_chat_show_photo'
+  ];
   const CHAT_CLOSED_CLASS = 'ytcc-chat-closed';
   const PIP_CLASS = 'ytcc-app-pip';
   const COMPACT_DESKTOP_CLASS = 'ytcc-compact-desktop';
   const CHAT_CSS = `
-    html.${COMPACT_DESKTOP_CLASS}:not(.${PIP_CLASS}):not(.ytcc-app-fullscreen):not(.ytcc-chat-only),
-    html.${COMPACT_DESKTOP_CLASS}:not(.${PIP_CLASS}):not(.ytcc-app-fullscreen):not(.ytcc-chat-only) body {
+    html.${COMPACT_DESKTOP_CLASS}:not(.${PIP_CLASS}):not(.ytcc-app-fullscreen),
+    html.${COMPACT_DESKTOP_CLASS}:not(.${PIP_CLASS}):not(.ytcc-app-fullscreen) body {
       overflow-x: hidden !important;
     }
-    html.${COMPACT_DESKTOP_CLASS}:not(.${PIP_CLASS}):not(.ytcc-app-fullscreen):not(.ytcc-chat-only) ytd-app {
+    html.${COMPACT_DESKTOP_CLASS}:not(.${PIP_CLASS}):not(.ytcc-app-fullscreen) ytd-app {
       min-height: calc(100vh / 0.88) !important;
       transform: scale(0.88) !important;
       transform-origin: 0 0 !important;
@@ -439,6 +444,11 @@
       } catch (_error) {
         // Ignore storage failures and keep the current page usable.
       }
+      url.searchParams.delete(param);
+      changed = true;
+    }
+    for (const param of STRIP_ONLY_APP_PARAMS) {
+      if (!url.searchParams.has(param)) continue;
       url.searchParams.delete(param);
       changed = true;
     }

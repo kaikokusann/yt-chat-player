@@ -24,10 +24,11 @@ export async function initializeNormalChatPage() {
 		handleActions(event.detail || [], view, factory);
 	}, { passive: true });
 
-	const params = new URL(location.href).searchParams;
-	const continuation = params.get('continuation');
+	const searchParams = new URL(location.href).searchParams;
+	const appParams = getAppParams();
+	const continuation = searchParams.get('continuation');
 	if (!continuation) return;
-	const initialOffset = Number.parseInt(params.get('ytcc_chat_offset_ms') || '0', 10);
+	const initialOffset = Number.parseInt(appParams.get('ytcc_chat_offset_ms') || '0', 10);
 
 	const abortController = new AbortController();
 	try {

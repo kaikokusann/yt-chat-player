@@ -103,7 +103,6 @@ class MainActivity : Activity() {
     private var youtubeChatCleanerEnabled = true
     private var liveChatFlusherEnabled = true
     private var chatOnlyModeEnabled = false
-    private var chatOnlyWatchModeActive = false
     private var pausePlaybackOnPipClose = true
     private var suppressFailedPageStopUntil = 0L
     private var currentOsFps = 0
@@ -914,7 +913,7 @@ class MainActivity : Activity() {
     }
 
     private fun applyEffectiveOsFps(showToast: Boolean = false) {
-        val forcedForChatOnly = chatOnlyModeEnabled && (activeSurface == BrowserSurface.CHAT || chatOnlyWatchModeActive)
+        val forcedForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT
         val fps = if (forcedForChatOnly) {
             CHAT_ONLY_FORCED_FPS
         } else {
@@ -1662,9 +1661,7 @@ class MainActivity : Activity() {
                 setChatOnlyMode(false)
             }
             BrowserSurface.VIDEO -> {
-                if (chatOnlyWatchModeActive) {
-                    setChatOnlyMode(false)
-                } else if (videoHistory.size > 1 && videoCanGoBack) {
+                if (videoHistory.size > 1 && videoCanGoBack) {
                     videoSession.goBack()
                 } else {
                     pauseVideoPlayback()
@@ -1901,7 +1898,7 @@ class MainActivity : Activity() {
 
     private fun updateChromeForPictureInPicture() {
         val hideChrome = fullScreen || inPictureInPicture
-        val hideForChatOnly = chatOnlyModeEnabled && (activeSurface == BrowserSurface.CHAT || chatOnlyWatchModeActive)
+        val hideForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT
         topBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         status.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         navBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
@@ -2071,7 +2068,6 @@ class MainActivity : Activity() {
     private fun setChatOnlyMode(enabled: Boolean) {
         if (enabled && activeSurface != BrowserSurface.VIDEO) {
             chatOnlyModeEnabled = false
-            chatOnlyWatchModeActive = false
             prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
             applyNormalChatModeToPage(false)
             status.text = "通常チャット専用モードは動画画面でオンにしてください"
@@ -2082,7 +2078,6 @@ class MainActivity : Activity() {
 
         if (enabled) {
             chatOnlyModeEnabled = true
-            chatOnlyWatchModeActive = false
             prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
             status.text = "通常チャットURLを取得中"
             applyNormalChatModeToPage(false)
@@ -2093,7 +2088,6 @@ class MainActivity : Activity() {
         }
 
         chatOnlyModeEnabled = enabled
-        chatOnlyWatchModeActive = false
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
         status.text = "通常チャット専用モード: OFF"
         applyNormalChatModeToPage(false)
@@ -2304,7 +2298,6 @@ class MainActivity : Activity() {
 
         Log.i(TAG, "Opening chat-only URL: $normalized")
         chatOnlyModeEnabled = true
-        chatOnlyWatchModeActive = false
         prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
         applyNormalChatModeToPage(false)
         resetChatSessionForChatOnly()
@@ -2458,16 +2451,19 @@ class MainActivity : Activity() {
             .appendQueryParameter("ytcc_app_normal_chat_show_photo", if (normalChatShowIcon) "1" else "0")
             .build()
         if (!chatOnlyModeEnabled || !isYouTubeChatUrl(rawUrl)) return flaggedUri.toString()
+        val chatOffsetMs = runCatching { uri.getQueryParameter("ytcc_chat_offset_ms") }.getOrNull()
+        val fragmentParams = mutableListOf(
+            "ytcc_app_chat_only=1",
+            "ytcc_app_normal_chat_font_scale=$normalChatFontScale",
+            "ytcc_app_normal_chat_show_name=${if (normalChatShowName) "1" else "0"}",
+            "ytcc_app_normal_chat_show_photo=${if (normalChatShowIcon) "1" else "0"}",
+        )
+        if (!chatOffsetMs.isNullOrBlank()) {
+            fragmentParams.add("ytcc_chat_offset_ms=$chatOffsetMs")
+        }
         return flaggedUri
             .buildUpon()
-            .encodedFragment(
-                listOf(
-                    "ytcc_app_chat_only=1",
-                    "ytcc_app_normal_chat_font_scale=$normalChatFontScale",
-                    "ytcc_app_normal_chat_show_name=${if (normalChatShowName) "1" else "0"}",
-                    "ytcc_app_normal_chat_show_photo=${if (normalChatShowIcon) "1" else "0"}",
-                ).joinToString("&")
-            )
+            .encodedFragment(fragmentParams.joinToString("&"))
             .build()
             .toString()
     }
