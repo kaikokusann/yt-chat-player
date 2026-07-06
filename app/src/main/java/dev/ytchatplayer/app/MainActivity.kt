@@ -147,8 +147,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         if (pausePlaybackOnPipClose && wasRecentlyInPictureInPicture && ::videoSession.isInitialized) {
-            pauseVideoPlayback()
-            hideMediaNotification()
+            mediaSession?.controller?.transportControls?.stop()
         }
         super.onStop()
     }
@@ -232,7 +231,7 @@ class MainActivity : Activity() {
                 }
 
                 override fun onStop() {
-                    hideMediaNotification()
+                    stopVideoPlayback()
                 }
             })
             isActive = true
@@ -1238,6 +1237,11 @@ class MainActivity : Activity() {
             })()
         """.trimIndent()
         videoSession.loadUri("javascript:${Uri.encode(script)}")
+    }
+
+    private fun stopVideoPlayback() {
+        pauseVideoPlayback()
+        hideMediaNotification()
     }
 
     private fun setAppFullScreen(enabled: Boolean) {
