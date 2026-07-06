@@ -353,6 +353,7 @@ class MainActivity : Activity() {
             )
         }
 
+        addNavButton(toolbarIconButton("再生/停止", R.drawable.ic_play_pause) { triggerYouTubePlayPauseShortcut() })
         addNavButton(toolbarIconButton("ホーム", R.drawable.ic_youtube_home) { loadUrl(HOME_URL) })
         addNavButton(toolbarIconButton("登録チャンネル", R.drawable.ic_youtube_subscriptions) {
             loadUrl("https://m.youtube.com/feed/subscriptions")
