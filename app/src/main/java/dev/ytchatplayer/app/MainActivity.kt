@@ -68,6 +68,7 @@ class MainActivity : Activity() {
     private var activeSurface = BrowserSurface.MOBILE
     private var mobileUrl: String = HOME_URL
     private var videoUrl: String = TEST_URL
+    private var videoTitle: String? = null
     private var mobileMode = BrowserMode.MOBILE
     private var videoMode = BrowserMode.DESKTOP
     private var mobileCanGoBack = false
@@ -671,6 +672,17 @@ class MainActivity : Activity() {
                                 }
                             }, 5000);
                         }
+                        (() => {
+                            const sendTitle = () => {
+                                const rawTitle = document.title || '';
+                                const title = rawTitle.replace(/\s*-\s*YouTube\s*$/i, '').trim();
+                                if (title) {
+                                    alert('ytcc-video-title:title=' + encodeURIComponent(title));
+                                }
+                            };
+                            sendTitle();
+                            setTimeout(sendTitle, 1200);
+                        })();
                     """.trimIndent()
                     session.loadUri("javascript:${Uri.encode(script)}")
                 }
@@ -724,6 +736,24 @@ class MainActivity : Activity() {
                             intent.setPackage(null)
                             runCatching { startActivity(intent) }
                         }
+                    }
+                    val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                    result.complete(prompt.dismiss())
+                    return result
+                }
+                if (message.startsWith("ytcc-video-title:")) {
+                    val data = message.substringAfter("ytcc-video-title:")
+                    val params = data.split("&").associate {
+                        val parts = it.split("=")
+                        if (parts.size == 2) parts[0] to parts[1] else it to ""
+                    }
+                    val title = params["title"]
+                        ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                    if (title != null) {
+                        videoTitle = title
+                        if (mediaNotificationVisible) showOrUpdateMediaNotification()
                     }
                     val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
                     result.complete(prompt.dismiss())
@@ -1198,6 +1228,7 @@ class MainActivity : Activity() {
     private fun trackVideoUrl(rawUrl: String) {
         val normalized = normalizeYouTubeUrl(rawUrl)
         if (surfaceForUrl(normalized) != BrowserSurface.VIDEO) return
+        if (normalized != videoUrl) videoTitle = null
         videoUrl = normalized
         val existingIndex = videoHistory.indexOfLast { it == normalized }
         if (existingIndex >= 0) {
@@ -1393,6 +1424,7 @@ class MainActivity : Activity() {
     }
 
     private fun mediaNotificationTitle(): String {
+        videoTitle?.takeIf { it.isNotBlank() }?.let { return "YouTubeを再生中: $it" }
         val videoId = runCatching { Uri.parse(videoUrl).getQueryParameter("v") }.getOrNull()
         return if (videoId.isNullOrBlank()) "YouTubeを再生中" else "YouTubeを再生中: $videoId"
     }
