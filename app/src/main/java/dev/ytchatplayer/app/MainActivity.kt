@@ -483,7 +483,10 @@ class MainActivity : Activity() {
             summary = "動画ページでチャットだけを大きく表示",
             isChecked = chatOnlyModeEnabled,
             isEnabled = activeSurface == BrowserSurface.VIDEO,
-            onCheckedChange = { checked -> setChatOnlyMode(checked) },
+            onCheckedChange = { checked ->
+                setChatOnlyMode(checked)
+                if (checked) dialog.dismiss()
+            },
         ))
 
         root.addView(materialSwitchCard(
