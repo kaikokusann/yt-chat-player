@@ -33,3 +33,6 @@ local.properties
 
 # Agents
 .agents/
+
+# Local adb screenshots
+android_screen.png
