@@ -62,6 +62,7 @@ class MainActivity : Activity() {
     private lateinit var runtime: GeckoRuntime
     private lateinit var mobileSession: GeckoSession
     private lateinit var videoSession: GeckoSession
+    private lateinit var chatSession: GeckoSession
     private lateinit var geckoView: GeckoView
     private lateinit var topBar: LinearLayout
     private lateinit var navBar: LinearLayout
@@ -77,13 +78,17 @@ class MainActivity : Activity() {
     private var activeSurface = BrowserSurface.MOBILE
     private var mobileUrl: String = HOME_URL
     private var videoUrl: String = TEST_URL
+    private var chatUrl: String = ""
     private var videoTitle: String? = null
     private var mobileMode = BrowserMode.MOBILE
     private var videoMode = BrowserMode.DESKTOP
+    private var chatMode = BrowserMode.DESKTOP
     private var mobileCanGoBack = false
     private var mobileCanGoForward = false
     private var videoCanGoBack = false
     private var videoCanGoForward = false
+    private var chatCanGoBack = false
+    private var chatCanGoForward = false
     private val videoHistory = mutableListOf<String>()
     private var fullScreen = false
     private var inPictureInPicture = false
@@ -138,11 +143,19 @@ class MainActivity : Activity() {
         hideMediaNotification()
         mediaSession?.release()
         mediaSession = null
-        if (::runtime.isInitialized && ::mobileSession.isInitialized && ::videoSession.isInitialized) {
-            runtime.webExtensionController.setTabActive(mobileSession, false)
-            runtime.webExtensionController.setTabActive(videoSession, false)
-            mobileSession.close()
-            videoSession.close()
+        if (::runtime.isInitialized) {
+            if (::mobileSession.isInitialized) {
+                runCatching { runtime.webExtensionController.setTabActive(mobileSession, false) }
+                runCatching { mobileSession.close() }
+            }
+            if (::videoSession.isInitialized) {
+                runCatching { runtime.webExtensionController.setTabActive(videoSession, false) }
+                runCatching { videoSession.close() }
+            }
+            if (::chatSession.isInitialized) {
+                runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
+                runCatching { chatSession.close() }
+            }
             runtime.shutdown()
         }
         super.onDestroy()
@@ -713,7 +726,7 @@ class MainActivity : Activity() {
     }
 
     private fun applyEffectiveOsFps(showToast: Boolean = false) {
-        val forcedForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.VIDEO
+        val forcedForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT
         val fps = if (forcedForChatOnly) {
             CHAT_ONLY_FORCED_FPS
         } else {
@@ -785,11 +798,14 @@ class MainActivity : Activity() {
         )
         mobileSession = createManagedSession(BrowserSurface.MOBILE, BrowserMode.MOBILE)
         videoSession = createManagedSession(BrowserSurface.VIDEO, BrowserMode.DESKTOP)
+        chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
         mobileSession.open(runtime)
         videoSession.open(runtime)
+        chatSession.open(runtime)
         geckoView.setSession(mobileSession)
         runtime.webExtensionController.setTabActive(mobileSession, true)
         runtime.webExtensionController.setTabActive(videoSession, false)
+        runtime.webExtensionController.setTabActive(chatSession, false)
     }
 
     private fun createManagedSession(surface: BrowserSurface, initialMode: BrowserMode): GeckoSession {
@@ -889,10 +905,7 @@ class MainActivity : Activity() {
                 val message = prompt.message ?: ""
                 if (message.startsWith("ytcc-save-state:")) {
                     val data = message.substringAfter("ytcc-save-state:")
-                    val params = data.split("&").associate {
-                        val parts = it.split("=")
-                        if (parts.size == 2) parts[0] to parts[1] else it to ""
-                    }
+                    val params = parseAlertParams(data)
                     val url = params["url"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
                     val t = params["t"]?.toIntOrNull() ?: 0
                     if (url != null && isYouTubeUrl(url) && browserModeFor(url) == BrowserMode.DESKTOP) {
@@ -905,12 +918,32 @@ class MainActivity : Activity() {
                     result.complete(prompt.dismiss())
                     return result
                 }
+                if (message.startsWith("ytcc-open-chat:")) {
+                    val data = message.substringAfter("ytcc-open-chat:")
+                    val params = parseAlertParams(data)
+                    val error = params["error"]
+                    if (error != null) {
+                        status.text = "チャットURLを取得できませんでした"
+                        Toast.makeText(this@MainActivity, "チャットを開けませんでした", Toast.LENGTH_SHORT).show()
+                        setChatOnlyMode(false)
+                    } else {
+                        val url = params["url"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                        val kind = params["kind"]?.takeIf { it.isNotBlank() }
+                        if (url != null && isYouTubeChatUrl(url)) {
+                            openChatOnlySurface(url, kind)
+                        } else {
+                            status.text = "チャットURLが不正です"
+                            Toast.makeText(this@MainActivity, "チャットURLが不正です", Toast.LENGTH_SHORT).show()
+                            setChatOnlyMode(false)
+                        }
+                    }
+                    val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                    result.complete(prompt.dismiss())
+                    return result
+                }
                 if (message.startsWith("ytcc-open-in-app:")) {
                     val data = message.substringAfter("ytcc-open-in-app:")
-                    val params = data.split("&").associate {
-                        val parts = it.split("=")
-                        if (parts.size == 2) parts[0] to parts[1] else it to ""
-                    }
+                    val params = parseAlertParams(data)
                     val url = params["url"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
                     val t = params["t"]?.toIntOrNull() ?: 0
                     if (url != null && isYouTubeUrl(url)) {
@@ -930,10 +963,7 @@ class MainActivity : Activity() {
                 }
                 if (message.startsWith("ytcc-video-title:")) {
                     val data = message.substringAfter("ytcc-video-title:")
-                    val params = data.split("&").associate {
-                        val parts = it.split("=")
-                        if (parts.size == 2) parts[0] to parts[1] else it to ""
-                    }
+                    val params = parseAlertParams(data)
                     val title = params["title"]
                         ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
                         ?.trim()
@@ -1010,10 +1040,28 @@ class MainActivity : Activity() {
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
+                if (surface != BrowserSurface.CHAT && targetSurface == BrowserSurface.CHAT) {
+                    runOnUiThread {
+                        switchToSurface(BrowserSurface.CHAT)
+                        applyBrowserMode(BrowserSurface.CHAT, BrowserMode.DESKTOP)
+                        loadUrlInto(BrowserSurface.CHAT, normalized)
+                    }
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+
                 if (surface == BrowserSurface.VIDEO && targetSurface == BrowserSurface.MOBILE) {
                     runOnUiThread {
                         switchToSurface(BrowserSurface.MOBILE)
                         loadUrlInto(BrowserSurface.MOBILE, normalized)
+                    }
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+
+                if (surface == BrowserSurface.CHAT && targetSurface != BrowserSurface.CHAT) {
+                    runOnUiThread {
+                        if (chatOnlyModeEnabled) setChatOnlyMode(false)
+                        switchToSurface(targetSurface)
+                        loadUrlInto(targetSurface, normalized)
                     }
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
@@ -1055,11 +1103,19 @@ class MainActivity : Activity() {
             }
 
             override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
-                if (surface == BrowserSurface.MOBILE) mobileCanGoBack = canGoBack else videoCanGoBack = canGoBack
+                when (surface) {
+                    BrowserSurface.MOBILE -> mobileCanGoBack = canGoBack
+                    BrowserSurface.VIDEO -> videoCanGoBack = canGoBack
+                    BrowserSurface.CHAT -> chatCanGoBack = canGoBack
+                }
             }
 
             override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
-                if (surface == BrowserSurface.MOBILE) mobileCanGoForward = canGoForward else videoCanGoForward = canGoForward
+                when (surface) {
+                    BrowserSurface.MOBILE -> mobileCanGoForward = canGoForward
+                    BrowserSurface.VIDEO -> videoCanGoForward = canGoForward
+                    BrowserSurface.CHAT -> chatCanGoForward = canGoForward
+                }
             }
         }
         return session
@@ -1143,20 +1199,36 @@ class MainActivity : Activity() {
     }
 
     private fun activeSession(): GeckoSession =
-        if (activeSurface == BrowserSurface.VIDEO) videoSession else mobileSession
+        sessionFor(activeSurface)
 
     private fun currentUrl(): String =
-        if (activeSurface == BrowserSurface.VIDEO) videoUrl else mobileUrl
+        when (activeSurface) {
+            BrowserSurface.MOBILE -> mobileUrl
+            BrowserSurface.VIDEO -> videoUrl
+            BrowserSurface.CHAT -> chatUrl.ifBlank { videoUrl }
+        }
 
     private fun sessionFor(surface: BrowserSurface): GeckoSession =
-        if (surface == BrowserSurface.VIDEO) videoSession else mobileSession
+        when (surface) {
+            BrowserSurface.MOBILE -> mobileSession
+            BrowserSurface.VIDEO -> videoSession
+            BrowserSurface.CHAT -> chatSession
+        }
 
     private fun updateSurfaceUrl(surface: BrowserSurface, url: String) {
-        if (surface == BrowserSurface.VIDEO) videoUrl = url else mobileUrl = url
+        when (surface) {
+            BrowserSurface.MOBILE -> mobileUrl = url
+            BrowserSurface.VIDEO -> videoUrl = url
+            BrowserSurface.CHAT -> chatUrl = url
+        }
     }
 
     private fun shouldRememberSurfaceUrl(surface: BrowserSurface, url: String): Boolean =
-        surface == BrowserSurface.VIDEO || surfaceForUrl(normalizeYouTubeUrl(url)) == BrowserSurface.MOBILE
+        when (surface) {
+            BrowserSurface.MOBILE -> surfaceForUrl(normalizeYouTubeUrl(url)) == BrowserSurface.MOBILE
+            BrowserSurface.VIDEO -> true
+            BrowserSurface.CHAT -> isYouTubeChatUrl(url)
+        }
 
     private fun urlForAddress(surface: BrowserSurface, candidateUrl: String): String =
         if (surface == BrowserSurface.MOBILE && !shouldRememberSurfaceUrl(surface, candidateUrl)) {
@@ -1298,7 +1370,11 @@ class MainActivity : Activity() {
 
     private fun applyBrowserMode(surface: BrowserSurface, mode: BrowserMode) {
         if (mode == modeFor(surface)) return
-        if (surface == BrowserSurface.VIDEO) videoMode = mode else mobileMode = mode
+        when (surface) {
+            BrowserSurface.MOBILE -> mobileMode = mode
+            BrowserSurface.VIDEO -> videoMode = mode
+            BrowserSurface.CHAT -> chatMode = mode
+        }
         val settings = sessionFor(surface).settings
         when (mode) {
             BrowserMode.MOBILE -> {
@@ -1314,15 +1390,20 @@ class MainActivity : Activity() {
     }
 
     private fun modeFor(surface: BrowserSurface): BrowserMode =
-        if (surface == BrowserSurface.VIDEO) videoMode else mobileMode
+        when (surface) {
+            BrowserSurface.MOBILE -> mobileMode
+            BrowserSurface.VIDEO -> videoMode
+            BrowserSurface.CHAT -> chatMode
+        }
 
     private fun switchToSurface(surface: BrowserSurface) {
         if (activeSurface == surface) return
-        
-        val oldSession = activeSession()
+
         if (surface == BrowserSurface.MOBILE && chatOnlyModeEnabled) {
             setChatOnlyMode(false)
         }
+
+        val oldSession = activeSession()
         if (activeSurface == BrowserSurface.VIDEO && surface == BrowserSurface.MOBILE) {
             pauseVideoPlayback()
             hideMediaNotification()
@@ -1340,8 +1421,12 @@ class MainActivity : Activity() {
         geckoView.setSession(activeSession())
         runtime.webExtensionController.setTabActive(activeSession(), true)
         address.setText(currentUrl())
-        status.text = if (surface == BrowserSurface.VIDEO) "PC動画セッション" else "モバイル一覧セッション"
-        if (surface == BrowserSurface.VIDEO) showOrUpdateMediaNotification()
+        status.text = when (surface) {
+            BrowserSurface.MOBILE -> "モバイル一覧セッション"
+            BrowserSurface.VIDEO -> "PC動画セッション"
+            BrowserSurface.CHAT -> "通常チャット専用セッション"
+        }
+        if (surface == BrowserSurface.VIDEO || surface == BrowserSurface.CHAT) showOrUpdateMediaNotification()
         updateChromeForPictureInPicture()
     }
 
@@ -1387,6 +1472,9 @@ class MainActivity : Activity() {
 
     private fun handleBack() {
         when (activeSurface) {
+            BrowserSurface.CHAT -> {
+                setChatOnlyMode(false)
+            }
             BrowserSurface.VIDEO -> {
                 if (videoHistory.size > 1 && videoCanGoBack) {
                     videoSession.goBack()
@@ -1403,6 +1491,9 @@ class MainActivity : Activity() {
 
     private fun handleForward() {
         when (activeSurface) {
+            BrowserSurface.CHAT -> {
+                if (chatCanGoForward) chatSession.goForward()
+            }
             BrowserSurface.VIDEO -> {
                 if (videoCanGoForward) videoSession.goForward()
             }
@@ -1622,7 +1713,7 @@ class MainActivity : Activity() {
 
     private fun updateChromeForPictureInPicture() {
         val hideChrome = fullScreen || inPictureInPicture
-        val hideForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.VIDEO
+        val hideForChatOnly = chatOnlyModeEnabled && activeSurface == BrowserSurface.CHAT
         topBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         status.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
         navBar.visibility = if (hideChrome || hideForChatOnly) View.GONE else View.VISIBLE
@@ -1637,7 +1728,7 @@ class MainActivity : Activity() {
     }
 
     private fun triggerYouTubeFullScreen() {
-        if (!isYouTubeUrl(currentUrl())) return
+        if (activeSurface != BrowserSurface.VIDEO || !isYouTubeUrl(currentUrl())) return
         geckoView.requestFocus()
         // 1. 再生トグルの起きない画面下部中央（動画情報や関連動画のあるエリア）を疑似タップしてUser Gestureを成立させる
         simulateNativeTouchAt(geckoView.width / 2f, geckoView.height * 0.7f)
@@ -1666,7 +1757,9 @@ class MainActivity : Activity() {
     }
 
     private fun triggerYouTubePlayPauseShortcut() {
-        if (!isYouTubeUrl(currentUrl())) return
+        val targetSession = if (activeSurface == BrowserSurface.CHAT) videoSession else activeSession()
+        val targetUrl = if (activeSurface == BrowserSurface.CHAT) videoUrl else currentUrl()
+        if (!isYouTubeUrl(targetUrl)) return
         geckoView.requestFocus()
         val script = """
             (() => {
@@ -1687,7 +1780,7 @@ class MainActivity : Activity() {
               }
             })()
         """.trimIndent()
-        activeSession().loadUri("javascript:${Uri.encode(script)}")
+        targetSession.loadUri("javascript:${Uri.encode(script)}")
         status.text = "再生/停止"
     }
 
@@ -1796,28 +1889,266 @@ class MainActivity : Activity() {
             updateChromeForPictureInPicture()
             return
         }
+
+        if (enabled) {
+            chatOnlyModeEnabled = true
+            prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
+            status.text = "チャットURLを取得中"
+            applyEffectiveOsFps(showToast = false)
+            updateChromeForPictureInPicture()
+            applyChatOnlyModeToPage(true)
+            requestChatOnlyUrlFromVideoPage()
+            return
+        }
+
         chatOnlyModeEnabled = enabled
-        prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, enabled).apply()
-        status.text = "通常チャット専用モード: ${if (enabled) "ON" else "OFF"}"
+        prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, false).apply()
+        status.text = "通常チャット専用モード: OFF"
+        applyChatOnlyModeToPage(false)
+        if (activeSurface == BrowserSurface.CHAT) {
+            switchToSurface(BrowserSurface.VIDEO)
+        }
+        stopChatOnlySession()
         applyEffectiveOsFps(showToast = false)
         updateChromeForPictureInPicture()
-        applyChatOnlyModeToPage(enabled)
+    }
+
+    private fun requestChatOnlyUrlFromVideoPage() {
+        if (!::videoSession.isInitialized) return
+        val script = """
+            (() => {
+              if (window.__ytcc_chat_only_request_timer) {
+                clearInterval(window.__ytcc_chat_only_request_timer);
+                window.__ytcc_chat_only_request_timer = null;
+              }
+
+              const chatPaths = new Set(['/live_chat', '/live_chat_replay']);
+              const normalizeChatUrl = rawUrl => {
+                const url = new URL(rawUrl, location.href);
+                url.hostname = 'www.youtube.com';
+                if (!chatPaths.has(url.pathname)) return null;
+                url.searchParams.set('is_popout', '1');
+                return url.toString();
+              };
+
+              const videoIdFromPage = () => {
+                try {
+                  const url = new URL(location.href);
+                  const fromQuery = url.searchParams.get('v');
+                  if (fromQuery) return fromQuery;
+                  if (url.pathname.startsWith('/live/')) {
+                    return url.pathname.split('/').filter(Boolean).pop() || '';
+                  }
+                } catch (_) {}
+                return '';
+              };
+
+              const extractJsonAfter = (text, marker) => {
+                const markerIndex = text.indexOf(marker);
+                if (markerIndex < 0) return null;
+                const start = text.indexOf('{', markerIndex + marker.length);
+                if (start < 0) return null;
+                let depth = 0;
+                let inString = false;
+                let escape = false;
+                for (let i = start; i < text.length; i++) {
+                  const ch = text[i];
+                  if (inString) {
+                    if (escape) {
+                      escape = false;
+                    } else if (ch === '\\') {
+                      escape = true;
+                    } else if (ch === '"') {
+                      inString = false;
+                    }
+                    continue;
+                  }
+                  if (ch === '"') {
+                    inString = true;
+                  } else if (ch === '{') {
+                    depth += 1;
+                  } else if (ch === '}') {
+                    depth -= 1;
+                    if (depth === 0) return text.slice(start, i + 1);
+                  }
+                }
+                return null;
+              };
+
+              const initialDataFromScripts = () => {
+                if (window.ytInitialData) return window.ytInitialData;
+                for (const script of document.scripts) {
+                  const text = script.textContent || '';
+                  if (!text.includes('ytInitialData')) continue;
+                  const json = extractJsonAfter(text, 'ytInitialData');
+                  if (!json) continue;
+                  try {
+                    return JSON.parse(json);
+                  } catch (_) {}
+                }
+                return null;
+              };
+
+              const chatUrlFromInitialData = () => {
+                const data = initialDataFromScripts();
+                const liveChatRenderer =
+                  data?.contents?.twoColumnWatchNextResults?.conversationBar?.liveChatRenderer;
+                const continuation =
+                  liveChatRenderer?.continuations?.[0]?.reloadContinuationData?.continuation;
+                if (!continuation) return '';
+                const path = liveChatRenderer?.isReplay ? '/live_chat_replay' : '/live_chat';
+                const url = new URL(path, 'https://www.youtube.com');
+                url.searchParams.set('continuation', continuation);
+                url.searchParams.set('is_popout', '1');
+                return url.toString();
+              };
+
+              const headerText = () => {
+                const selectors = [
+                  'yt-live-chat-header-renderer',
+                  'ytd-live-chat-frame',
+                  '#chat',
+                  '#panels'
+                ];
+                return selectors
+                  .map(selector => document.querySelector(selector)?.textContent || '')
+                  .join(' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+              };
+
+              const findChatUrl = () => {
+                const selectors = [
+                  'iframe#chatframe',
+                  'ytd-live-chat-frame iframe',
+                  'iframe[src*="/live_chat"]',
+                  'iframe[src*="/live_chat_replay"]'
+                ];
+                for (const selector of selectors) {
+                  const frame = document.querySelector(selector);
+                  const src = frame?.getAttribute('src') || frame?.src;
+                  if (!src) continue;
+                  const normalized = normalizeChatUrl(src);
+                  if (normalized) return normalized;
+                }
+
+                const fromInitialData = chatUrlFromInitialData();
+                if (fromInitialData) return fromInitialData;
+
+                const text = headerText();
+                const appearsArchive = /リプレイ|replay/i.test(text);
+                const videoId = videoIdFromPage();
+                if (videoId && !appearsArchive) {
+                  return `https://www.youtube.com/live_chat?is_popout=1&v=${'$'}{encodeURIComponent(videoId)}`;
+                }
+                return '';
+              };
+
+              const send = (url, source) => {
+                const kind = url.includes('/live_chat_replay') ? 'archive' : 'live';
+                alert(
+                  'ytcc-open-chat:url=' + encodeURIComponent(url) +
+                  '&kind=' + encodeURIComponent(kind) +
+                  '&source=' + encodeURIComponent(source)
+                );
+              };
+
+              const trySend = source => {
+                const url = findChatUrl();
+                if (!url) return false;
+                send(url, source);
+                return true;
+              };
+
+              if (trySend('immediate')) return;
+
+              let attempts = 0;
+              window.__ytcc_chat_only_request_timer = setInterval(() => {
+                attempts += 1;
+                if (trySend('retry')) {
+                  clearInterval(window.__ytcc_chat_only_request_timer);
+                  window.__ytcc_chat_only_request_timer = null;
+                  return;
+                }
+                if (attempts >= 24) {
+                  clearInterval(window.__ytcc_chat_only_request_timer);
+                  window.__ytcc_chat_only_request_timer = null;
+                  alert('ytcc-open-chat:error=no-chat-url');
+                }
+              }, 250);
+            })()
+        """.trimIndent()
+        videoSession.loadUri("javascript:${Uri.encode(script)}")
+    }
+
+    private fun openChatOnlySurface(rawChatUrl: String, playbackKind: String?) {
+        val normalized = normalizeChatOnlyUrl(rawChatUrl)
+        if (!isYouTubeChatUrl(normalized)) {
+            status.text = "チャットURLが不正です"
+            setChatOnlyMode(false)
+            return
+        }
+
+        val kind = playbackKind ?: chatPlaybackKindForUrl(normalized)
+        chatOnlyModeEnabled = true
+        prefs.edit().putBoolean(PREF_CHAT_ONLY_MODE, true).apply()
+
+        if (kind == "live") {
+            pauseVideoPlayback()
+        } else if (kind == "archive") {
+            setVideoPlaybackPaused(false)
+        }
+
+        resetChatSessionForChatOnly()
+        switchToSurface(BrowserSurface.CHAT)
+        applyBrowserMode(BrowserSurface.CHAT, BrowserMode.DESKTOP)
+        loadUrlInto(BrowserSurface.CHAT, normalized, replaceHistory = true)
+        applyEffectiveOsFps(showToast = false)
+        updateChromeForPictureInPicture()
+        status.text = "通常チャット専用モード: ON"
+    }
+
+    private fun resetChatSessionForChatOnly() {
+        if (::chatSession.isInitialized) {
+            runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
+            runCatching { chatSession.stop() }
+            runCatching { chatSession.close() }
+        }
+        chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
+        chatSession.open(runtime)
+        chatMode = BrowserMode.DESKTOP
+        chatCanGoBack = false
+        chatCanGoForward = false
+    }
+
+    private fun stopChatOnlySession() {
+        if (!::runtime.isInitialized || !::chatSession.isInitialized) return
+        runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
+        runCatching { chatSession.stop() }
+        runCatching { chatSession.close() }
+        chatSession = createManagedSession(BrowserSurface.CHAT, BrowserMode.DESKTOP)
+        chatSession.open(runtime)
+        chatMode = BrowserMode.DESKTOP
+        chatCanGoBack = false
+        chatCanGoForward = false
+        chatUrl = ""
+        runCatching { runtime.webExtensionController.setTabActive(chatSession, false) }
     }
 
     private fun applyChatOnlyModeToPage(enabled: Boolean) {
         if (!::videoSession.isInitialized) return
         val value = if (enabled) "1" else "0"
-        val method = if (enabled) "add" else "remove"
         val script = """
             (() => {
               try { localStorage.setItem('ytcc-app-chat-only-enabled', '$value'); } catch (_) {}
-              document.documentElement.classList.$method('ytcc-chat-only');
-              if (document.body) document.body.classList.$method('ytcc-chat-only');
               window.dispatchEvent(new Event('ytcc-chat-only-change'));
               window.dispatchEvent(new Event('resize'));
             })()
         """.trimIndent()
-        activeSession().loadUri("javascript:${Uri.encode(script)}")
+        videoSession.loadUri("javascript:${Uri.encode(script)}")
+        if (::chatSession.isInitialized) {
+            chatSession.loadUri("javascript:${Uri.encode(script)}")
+        }
     }
 
     private fun withAppFlags(rawUrl: String): String {
@@ -1838,11 +2169,43 @@ class MainActivity : Activity() {
             .toString()
     }
 
+    private fun parseAlertParams(data: String): Map<String, String> =
+        data.split("&")
+            .filter { it.isNotBlank() }
+            .associate { entry ->
+                val separator = entry.indexOf('=')
+                if (separator >= 0) {
+                    entry.substring(0, separator) to entry.substring(separator + 1)
+                } else {
+                    entry to ""
+                }
+            }
+
     private fun handoffVideoUrl(rawUrl: String): String? {
         val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return null
         val host = uri.host?.lowercase() ?: return null
         if (host !in YOUTUBE_HOSTS || uri.path != "/ytcc-open-video") return null
         return uri.getQueryParameter("url")?.takeIf { isYouTubeUrl(it) }
+    }
+
+    private fun normalizeChatOnlyUrl(rawUrl: String): String {
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return rawUrl
+        val host = uri.host?.lowercase() ?: return rawUrl
+        if (host !in YOUTUBE_HOSTS) return rawUrl
+        if (!isYouTubeChatUrl(rawUrl)) return rawUrl
+        val builder = uri.buildUpon().authority("www.youtube.com").clearQuery()
+        for (key in uri.queryParameterNames) {
+            if (key == "is_popout") continue
+            for (value in uri.getQueryParameters(key)) {
+                builder.appendQueryParameter(key, value)
+            }
+        }
+        return builder.appendQueryParameter("is_popout", "1").build().toString()
+    }
+
+    private fun chatPlaybackKindForUrl(rawUrl: String): String {
+        val path = runCatching { Uri.parse(rawUrl).path.orEmpty() }.getOrNull().orEmpty()
+        return if (path == "/live_chat_replay") "archive" else "live"
     }
 
     private fun browserModeFor(rawUrl: String): BrowserMode {
@@ -1851,7 +2214,7 @@ class MainActivity : Activity() {
         if (host == "youtu.be") return BrowserMode.DESKTOP
         if (host !in YOUTUBE_HOSTS) return BrowserMode.MOBILE
         val path = uri.path.orEmpty()
-        return if (path == "/watch" || path.startsWith("/live/")) {
+        return if (path == "/watch" || path.startsWith("/live/") || isYouTubeChatUrl(rawUrl)) {
             BrowserMode.DESKTOP
         } else {
             BrowserMode.MOBILE
@@ -1859,7 +2222,11 @@ class MainActivity : Activity() {
     }
 
     private fun surfaceForUrl(rawUrl: String): BrowserSurface =
-        if (browserModeFor(rawUrl) == BrowserMode.DESKTOP) BrowserSurface.VIDEO else BrowserSurface.MOBILE
+        when {
+            isYouTubeChatUrl(rawUrl) -> BrowserSurface.CHAT
+            browserModeFor(rawUrl) == BrowserMode.DESKTOP -> BrowserSurface.VIDEO
+            else -> BrowserSurface.MOBILE
+        }
 
     private fun normalizeYouTubeUrl(rawUrl: String): String {
         val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return rawUrl
@@ -1883,7 +2250,7 @@ class MainActivity : Activity() {
 
         val path = uri.path.orEmpty()
         val targetHost = when {
-            path == "/watch" || path.startsWith("/live/") -> "www.youtube.com"
+            path == "/watch" || path.startsWith("/live/") || isYouTubeChatUrl(rawUrl) -> "www.youtube.com"
             path == "/" ||
                 path.startsWith("/results") ||
                 path.startsWith("/feed/history") ||
@@ -1934,6 +2301,13 @@ class MainActivity : Activity() {
     private fun isYouTubeUrl(rawUrl: String): Boolean {
         val host = runCatching { Uri.parse(rawUrl).host?.lowercase() }.getOrNull() ?: return false
         return host in YOUTUBE_HOSTS
+    }
+
+    private fun isYouTubeChatUrl(rawUrl: String): Boolean {
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return false
+        val host = uri.host?.lowercase() ?: return false
+        val path = uri.path.orEmpty()
+        return host in YOUTUBE_HOSTS && (path == "/live_chat" || path == "/live_chat_replay")
     }
 
     private fun isInternalGeckoUrl(rawUrl: String): Boolean {
@@ -2011,6 +2385,7 @@ class MainActivity : Activity() {
     private enum class BrowserSurface {
         MOBILE,
         VIDEO,
+        CHAT,
     }
 }
 

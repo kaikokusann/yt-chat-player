@@ -124,15 +124,23 @@ function isChatOnlyEnabled() {
 }
 
 function applyChatOnlyMode() {
-  const enabled = isAppEnabled() && isChatOnlyEnabled();
+  const enabled = isAppEnabled() && isChatOnlyEnabled() && isChatOnlyEligibleDocument();
   document.documentElement.classList.toggle(CHAT_ONLY_CLASS, enabled);
   if (document.body) document.body.classList.toggle(CHAT_ONLY_CLASS, enabled);
-  if (!enabled) {
+  if (!enabled || isStandaloneChatPage()) {
     clearChatOnlyPlaybackTimers();
     return;
   }
   scheduleChatOnlyPlaybackControl();
   window.dispatchEvent(new Event('resize'));
+}
+
+function isChatOnlyEligibleDocument() {
+  return isStandaloneChatPage();
+}
+
+function isStandaloneChatPage() {
+  return location.pathname === '/live_chat' || location.pathname === '/live_chat_replay';
 }
 
 function scheduleChatOnlyPlaybackControl() {

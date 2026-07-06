@@ -204,6 +204,17 @@
   display: none !important;
 }
 
+:root.ytcc-enabled.ytcc-chat-only yt-live-chat-app {
+  display: block !important;
+  height: 100vh !important;
+  max-height: none !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  width: 100vw !important;
+}
+
 :root.ytcc-enabled.ytcc-chat-only yt-live-chat-app,
 :root.ytcc-enabled.ytcc-chat-only yt-live-chat-renderer {
   font-size: 24px !important;
