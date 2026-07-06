@@ -2449,13 +2449,25 @@ class MainActivity : Activity() {
                 builder.appendQueryParameter(key, value)
             }
         }
-        return builder
+        val flaggedUri = builder
             .appendQueryParameter("ytcc_app_ycc", if (youtubeChatCleanerEnabled) "1" else "0")
             .appendQueryParameter("ytcc_app_lcf", if (liveChatFlusherEnabled) "1" else "0")
             .appendQueryParameter("ytcc_app_chat_only", if (chatOnlyModeEnabled) "1" else "0")
             .appendQueryParameter("ytcc_app_normal_chat_font_scale", normalChatFontScale.toString())
             .appendQueryParameter("ytcc_app_normal_chat_show_name", if (normalChatShowName) "1" else "0")
             .appendQueryParameter("ytcc_app_normal_chat_show_photo", if (normalChatShowIcon) "1" else "0")
+            .build()
+        if (!chatOnlyModeEnabled || !isYouTubeChatUrl(rawUrl)) return flaggedUri.toString()
+        return flaggedUri
+            .buildUpon()
+            .encodedFragment(
+                listOf(
+                    "ytcc_app_chat_only=1",
+                    "ytcc_app_normal_chat_font_scale=$normalChatFontScale",
+                    "ytcc_app_normal_chat_show_name=${if (normalChatShowName) "1" else "0"}",
+                    "ytcc_app_normal_chat_show_photo=${if (normalChatShowIcon) "1" else "0"}",
+                ).joinToString("&")
+            )
             .build()
             .toString()
     }

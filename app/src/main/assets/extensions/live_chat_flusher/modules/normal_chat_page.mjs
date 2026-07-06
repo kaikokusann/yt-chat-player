@@ -53,7 +53,7 @@ export async function initializeNormalChatPage() {
 }
 
 function applyUrlSettings() {
-	const params = new URL(location.href).searchParams;
+	const params = getAppParams();
 	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_font_scale', 'ytlcf-app-normal-chat-font-scale', 'data-ytlcf-app-normal-chat-font-scale');
 	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_show_name', 'ytlcf-app-normal-chat-show-name', 'data-ytlcf-app-normal-chat-show-name');
 	copyParamToStorageAndAttr(params, 'ytcc_app_normal_chat_show_photo', 'ytlcf-app-normal-chat-show-photo', 'data-ytlcf-app-normal-chat-show-photo');
@@ -88,10 +88,20 @@ function installSettingsSync(view) {
 
 function isEnabled() {
 	try {
-		return new URL(location.href).searchParams.get('ytcc_app_chat_only') === '1';
+		return getAppParams().get('ytcc_app_chat_only') === '1';
 	} catch (_error) {
 		return false;
 	}
+}
+
+function getAppParams() {
+	const url = new URL(location.href);
+	const params = new URLSearchParams(url.search);
+	const hashParams = new URLSearchParams(url.hash.replace(/^#\??/, ''));
+	for (const [key, value] of hashParams) {
+		if (!params.has(key)) params.set(key, value);
+	}
+	return params;
 }
 
 function installPageStyle() {

@@ -4,7 +4,13 @@ self.browser ??= chrome;
 if (localStorage.getItem('ytcc-app-lcf-enabled') !== '0') {
 const manifest = browser.runtime.getManifest();
 
-Promise.all([
+if (isNormalChatPageMode()) {
+	import(browser.runtime.getURL('./modules/normal_chat_page.mjs'))
+		.then(module => module.initializeNormalChatPage())
+		.catch(console.error);
+}
+
+	Promise.all([
 	import(browser.runtime.getURL('./modules/logging.mjs')),
 	new Promise(resolve => {
 		(function check() {
@@ -89,4 +95,23 @@ async function checkAutoStart() {
 	button?.click();
 	return true;
 }
+
+function isNormalChatPageMode() {
+	try {
+		if (!/^\/live_chat(?:_replay)?$/.test(location.pathname)) return false;
+		return getAppParams().get('ytcc_app_chat_only') === '1';
+	} catch (_error) {
+		return false;
+	}
 }
+
+function getAppParams() {
+	const url = new URL(location.href);
+	const params = new URLSearchParams(url.search);
+	const hashParams = new URLSearchParams(url.hash.replace(/^#\??/, ''));
+	for (const [key, value] of hashParams) {
+		if (!params.has(key)) params.set(key, value);
+	}
+	return params;
+}
+	}

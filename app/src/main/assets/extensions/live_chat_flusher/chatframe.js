@@ -56,8 +56,18 @@ function getPopupDocument() {
 
 function isNormalChatPageMode() {
 	try {
-		return new URL(location.href).searchParams.get('ytcc_app_chat_only') === '1';
+		return getAppParams().get('ytcc_app_chat_only') === '1';
 	} catch (_error) {
 		return false;
 	}
+}
+
+function getAppParams() {
+	const url = new URL(location.href);
+	const params = new URLSearchParams(url.search);
+	const hashParams = new URLSearchParams(url.hash.replace(/^#\??/, ''));
+	for (const [key, value] of hashParams) {
+		if (!params.has(key)) params.set(key, value);
+	}
+	return params;
 }
